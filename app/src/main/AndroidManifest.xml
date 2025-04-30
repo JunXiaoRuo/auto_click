@@ -3,23 +3,27 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- 声明要查询的应用类型 -->
     <queries>
+
         <!-- 查询所有 Launcher 应用（可启动的应用） -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
+
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
-    </queries>
-    <!-- 其他权限和配置 -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+    </queries> <!-- 其他权限和配置 -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
-    <!-- 如果需要 Root 权限 -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" /> <!-- 如果需要 Root 权限 -->
     <uses-permission android:name="android.permission.ACCESS_SUPERUSER" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
-    <uses-permission android:name="android.permission.DUMP"
+    <uses-permission
+        android:name="android.permission.DUMP"
         tools:ignore="ProtectedPermissions" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -30,14 +34,19 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Click"
         tools:targetApi="31">
-        <activity android:name=".MainActivity"
+        <activity
+            android:name=".Operation"
+            android:exported="false"
+            tools:ignore="Instantiatable" />
+        <activity
+            android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
     </application>
 
 </manifest>

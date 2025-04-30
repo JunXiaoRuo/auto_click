@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="operation_types">
+        <item>点击操作</item>
+        <item>滑动操作</item>
+    </string-array>
+</resources>
