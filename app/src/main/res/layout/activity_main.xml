@@ -22,10 +22,11 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="自动点击助手"
+                android:text="@string/app_name"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
-                android:textStyle="bold"/>
+                android:textStyle="bold"
+                android:paddingTop="20dp"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -33,17 +34,39 @@
                 android:text="v1.0.0"
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp"
-                android:layout_marginStart="8dp"/>
+                android:layout_marginStart="8dp"
+                android:paddingTop="20dp"/>
         </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="by: 君若"
+            android:text="by: 君若（酷安）"
             android:textColor="#CCFFFFFF"
             android:textSize="12sp"
             android:layout_marginTop="4dp"/>
     </LinearLayout>
+
+    <!-- 替代方案：单独一行显示 -->
+    <TextView
+        android:id="@+id/tv_root_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:padding="6dp"
+        android:textSize="12sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/root_status_bg"
+        android:text="ROOT状态检测中..."
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/black"
+        android:layout_marginTop="10dp"/>
 
     <!-- 主内容区域 -->
     <LinearLayout
@@ -56,8 +79,13 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="目标应用："
+                android:textColor="@color/black"/>
 
             <EditText
                 android:id="@+id/et_app_activity"
@@ -65,7 +93,10 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:hint="选择目标应用"
-                android:inputType="text"/>
+                android:inputType="none"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:cursorVisible="false"/>
 
             <Button
                 android:id="@+id/btn_select_app"

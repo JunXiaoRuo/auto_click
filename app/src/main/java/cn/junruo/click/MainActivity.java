@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
@@ -52,15 +53,20 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SWIPE_DURATION = "swipe_duration";
     private static final int DEFAULT_CLICK_DURATION = 50; // 默认点击持续时间(ms)
     private static final int DEFAULT_SWIPE_DURATION = 100; // 默认滑动持续时间(ms)
-
     private Button btnSettings;
+    private TextView tvRootStatus;
+    private boolean hasRootPermission = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        // 初始化视图
         initViews();
+
+        // 检查ROOT权限
+        checkRootPermission();
+
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         loadConfig();
 
@@ -96,6 +102,42 @@ public class MainActivity extends AppCompatActivity {
 
         btnSettings = findViewById(R.id.btn_settings);
         btnSettings.setOnClickListener(v -> showSettingsDialog());
+
+        tvRootStatus = findViewById(R.id.tv_root_status);
+        tvRootStatus.setOnClickListener(v -> {
+            if (!hasRootPermission) {
+                requestRootPermission();
+            }
+        });
+    }
+
+    private void checkRootPermission() {
+        new Thread(() -> {
+            hasRootPermission = hasRootPermission();
+            runOnUiThread(() -> updateRootStatusUI());
+        }).start();
+    }
+
+    private void updateRootStatusUI() {
+        if (hasRootPermission) {
+            tvRootStatus.setText("ROOT已获取");
+            tvRootStatus.setBackgroundColor(Color.parseColor("#FF4CAF50")); // 绿色
+        } else {
+            tvRootStatus.setText("ROOT未获取（点我获取）");
+            tvRootStatus.setBackgroundColor(Color.parseColor("#FFF44336")); // 红色
+        }
+    }
+
+    private void requestRootPermission() {
+        new AlertDialog.Builder(this)
+                .setTitle("申请ROOT权限")
+                .setMessage("此功能需要ROOT权限才能正常工作，是否现在申请？")
+                .setPositiveButton("申请", (dialog, which) -> {
+                    checkRootPermission();
+                    Toast.makeText(this, "正在尝试获取ROOT权限...（部分su软件可能需要打开应用给与权限）", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
     // 添加设置对话框方法
     private void showSettingsDialog() {
@@ -349,8 +391,6 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
     }
-
-    //sdsadada
 
     @Override
     protected void onDestroy() {
