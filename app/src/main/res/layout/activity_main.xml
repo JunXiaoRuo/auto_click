@@ -31,7 +31,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="v1.0.0"
+                android:text="v1.1"
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp"
                 android:layout_marginStart="8dp"
@@ -47,7 +47,7 @@
             android:layout_marginTop="4dp"/>
     </LinearLayout>
 
-    <!-- 替代方案：单独一行显示 -->
+    <!-- ROOT状态显示 -->
     <TextView
         android:id="@+id/tv_root_status"
         android:layout_width="match_parent"
@@ -136,6 +136,70 @@
             android:layout_weight="1"
             android:layout_marginTop="8dp"
             android:background="#FFFFFF"/>
+
+        <!-- 在执行完成后的操作区域 -->
+        <LinearLayout
+            android:id="@+id/layout_completion_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp"
+            android:background="#FFFFFF"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="执行完成后操作:"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="停止选中的应用"
+                    android:layout_marginEnd="8dp"/>
+
+                <Switch
+                    android:id="@+id/sw_stop_apps_enabled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <!-- 添加自杀开关 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="自杀本应用"
+                    android:layout_marginEnd="8dp"/>
+
+                <Switch
+                    android:id="@+id/sw_self_kill"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_select_apps_to_stop"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="选择要停止的应用"/>
+
+
+        </LinearLayout>
 
         <!-- 自动执行开关 -->
         <LinearLayout
