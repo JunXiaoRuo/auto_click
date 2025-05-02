@@ -30,7 +30,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="v1.1"
+                android:text="v1.2"
                 android:textColor="#000"
                 android:textSize="12sp"
                 android:layout_marginStart="8dp"/>
@@ -112,7 +112,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="3dp">
 
             <Button
                 android:id="@+id/btn_add_operation"
@@ -152,15 +152,13 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginTop="3dp"
-            android:background="#FFFFFF"
-            android:padding="8dp">
+            android:background="#FFFFFF">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="执行完成后操作:"
-                android:textStyle="bold"
-                android:layout_marginBottom="4dp"/>
+                android:textStyle="bold"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -178,14 +176,6 @@
                     android:id="@+id/sw_stop_apps_enabled"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
-            </LinearLayout>
-            <!-- 添加自杀开关 -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -203,7 +193,6 @@
                 android:id="@+id/btn_select_apps_to_stop"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
                 android:text="选择要停止的应用"/>
 
 
@@ -217,8 +206,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="16dp">
+            android:gravity="center_vertical">
 
             <TextView
                 android:layout_width="wrap_content"
