@@ -3,15 +3,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#f5f5f5">
+    android:fitsSystemWindows="true">
 
     <!-- 自定义标题栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#3F51B5"
-        android:padding="12dp">
+        android:background="#A8FFFFFF"
+        android:padding="5dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -22,16 +22,16 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="自动点击助手"
-                android:textColor="#FFFFFF"
+                android:text="@string/app_name"
+                android:textColor="#000"
                 android:textSize="20sp"
                 android:textStyle="bold"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="v1.0.0"
-                android:textColor="#CCFFFFFF"
+                android:text="v1.2"
+                android:textColor="#000"
                 android:textSize="12sp"
                 android:layout_marginStart="8dp"/>
         </LinearLayout>
@@ -39,11 +39,36 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="by: 君若"
-            android:textColor="#CCFFFFFF"
+            android:text="by: 君若（酷安）"
+            android:textColor="#000"
             android:textSize="12sp"
             android:layout_marginTop="4dp"/>
     </LinearLayout>
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#929292"
+        android:layout_marginTop="5dp"/>
+    <!-- ROOT状态显示 -->
+    <TextView
+        android:id="@+id/tv_root_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:padding="6dp"
+        android:textSize="12sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/root_status_bg"
+        android:text="ROOT状态检测中..."
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#929292"
+        android:layout_marginTop="5dp"/>
 
     <!-- 主内容区域 -->
     <LinearLayout
@@ -56,8 +81,13 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="目标应用："
+                android:textColor="@color/black"/>
 
             <EditText
                 android:id="@+id/et_app_activity"
@@ -65,7 +95,10 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:hint="选择目标应用"
-                android:inputType="text"/>
+                android:inputType="none"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:cursorVisible="false"/>
 
             <Button
                 android:id="@+id/btn_select_app"
@@ -79,7 +112,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="3dp">
 
             <Button
                 android:id="@+id/btn_add_operation"
@@ -96,23 +129,84 @@
                 android:layout_marginStart="8dp"
                 android:text="速度设置"/>
         </LinearLayout>
-
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#929292"/>
         <!-- 操作步骤列表 -->
         <ListView
             android:id="@+id/lv_operations"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="5dp"
             android:background="#FFFFFF"/>
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#929292"/>
+        <!-- 在执行完成后的操作区域 -->
+        <LinearLayout
+            android:id="@+id/layout_completion_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="3dp"
+            android:background="#FFFFFF">
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="执行完成后操作:"
+                android:textStyle="bold"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="停止选中的应用"
+                    android:layout_marginEnd="8dp"/>
+
+                <Switch
+                    android:id="@+id/sw_stop_apps_enabled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="自杀本应用"
+                    android:layout_marginEnd="8dp"/>
+
+                <Switch
+                    android:id="@+id/sw_self_kill"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_select_apps_to_stop"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="选择要停止的应用"/>
+
+
+        </LinearLayout>
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#929292"/>
         <!-- 自动执行开关 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="16dp">
+            android:gravity="center_vertical">
 
             <TextView
                 android:layout_width="wrap_content"
