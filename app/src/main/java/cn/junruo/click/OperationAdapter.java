@@ -19,10 +19,6 @@ public class OperationAdapter extends ArrayAdapter<Operation> {
         this.operations = operations;
     }
 
-    public void updateData(ArrayList<Operation> operations) {
-        this.operations = operations;
-        notifyDataSetChanged();
-    }
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {

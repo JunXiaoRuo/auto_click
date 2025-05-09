@@ -69,13 +69,65 @@
         android:layout_height="1dp"
         android:background="#929292"
         android:layout_marginTop="5dp"/>
+    <!-- 在ROOT状态显示上方添加 -->
+    <!-- 修改方案选择区域的LinearLayout -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#EEEEEE">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black"
+                android:text="方案："/>
+            <Spinner
+                android:id="@+id/sp_scheme_selector"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"/>
+
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <Button
+                android:id="@+id/btn_new_scheme"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="新建"/>
+
+            <Button
+                android:id="@+id/btn_save_scheme"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="保存"
+                android:layout_marginStart="8dp"/>
+
+            <Button
+                android:id="@+id/btn_delete_scheme"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="删除"
+                android:layout_marginStart="8dp"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
 
     <!-- 主内容区域 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="8dp">
 
         <!-- 应用选择区域 -->
         <LinearLayout
@@ -121,13 +173,6 @@
                 android:layout_weight="1"
                 android:text="添加操作步骤"/>
 
-            <Button
-                android:id="@+id/btn_settings"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="速度设置"/>
         </LinearLayout>
         <View
             android:layout_width="match_parent"
@@ -146,6 +191,7 @@
             android:layout_height="1dp"
             android:background="#929292"/>
         <!-- 在执行完成后的操作区域 -->
+        <!-- 在执行完成操作区域 -->
         <LinearLayout
             android:id="@+id/layout_completion_actions"
             android:layout_width="match_parent"
@@ -177,16 +223,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="自杀本应用"
-                    android:layout_marginEnd="8dp"/>
-
-                <Switch
-                    android:id="@+id/sw_self_kill"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"/>
             </LinearLayout>
 
             <Button
@@ -194,8 +230,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="选择要停止的应用"/>
-
-
         </LinearLayout>
         <View
             android:layout_width="match_parent"
@@ -218,6 +252,13 @@
                 android:id="@+id/sw_auto_click"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"/>
+            <Button
+                android:id="@+id/btn_settings"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="速度设置"/>
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

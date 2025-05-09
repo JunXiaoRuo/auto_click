@@ -38,154 +38,450 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_APP_NAME = "app_name";
     private static final String KEY_OPERATIONS = "operations";
     private static final String KEY_AUTO_CLICK = "auto_click";
+    private static final String KEY_SCHEMES = "schemes";
+    private static final String KEY_CURRENT_SCHEME = "current_scheme";
+    private static final String KEY_CLICK_DURATION = "click_duration";
+    private static final String KEY_SWIPE_DURATION = "swipe_duration";
+    private static final String KEY_STOP_APPS = "stop_apps";
+    private static final String KEY_STOP_APPS_ENABLED = "stop_apps_enabled";
+    private static final int DEFAULT_CLICK_DURATION = 50;
+    private static final int DEFAULT_SWIPE_DURATION = 100;
 
+    // UI 组件
     private EditText etAppActivity;
     private Switch swAutoClick;
     private Button btnSelectApp;
     private Button btnAddOperation;
     private ListView lvOperations;
+    private Button btnSettings;
+    private TextView tvRootStatus;
+    private Switch swStopAppsEnabled;
+    private Button btnSelectAppsToStop;
+    private Spinner spSchemeSelector;
+    private Button btnNewScheme;
+    private Button btnSaveScheme;
+    private Button btnDeleteScheme;
 
     private final Handler handler = new Handler();
     private SharedPreferences sharedPreferences;
     private ArrayList<Operation> operations = new ArrayList<>();
     private OperationAdapter operationAdapter;
-
-    // 添加以下常量定义
-    private static final String KEY_CLICK_DURATION = "click_duration";
-    private static final String KEY_SWIPE_DURATION = "swipe_duration";
-    private static final int DEFAULT_CLICK_DURATION = 50; // 默认点击持续时间(ms)
-    private static final int DEFAULT_SWIPE_DURATION = 100; // 默认滑动持续时间(ms)
-    private Button btnSettings;
-    private TextView tvRootStatus;
+    private ArrayList<Scheme> schemes = new ArrayList<>();
+    private Scheme currentScheme;
     private boolean hasRootPermission = false;
-    private static final String KEY_STOP_APPS = "stop_apps";
-    private static final String KEY_STOP_APPS_ENABLED = "stop_apps_enabled";
-    private Switch swStopAppsEnabled;
-    private Button btnSelectAppsToStop;
     private List<String> selectedAppsToStop = new ArrayList<>();
-    // 在类变量区域添加
-    private static final String KEY_SELF_KILL = "self_kill";
-    private Switch swSelfKill;
 
+    // 修改onCreate方法中的初始化顺序
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getWindow().setStatusBarColor(getResources().getColor(R.color.white));//设置状态栏颜色
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);//实现状态栏图标和文字颜色为暗色
+            getWindow().setStatusBarColor(getResources().getColor(R.color.white));
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
 
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        // 初始化视图
+        // 1. 初始化视图
         initViews();
 
-        // 检查ROOT权限
+        // 2. 检查ROOT权限
         checkRootPermission();
 
-        loadConfig();
+        // 3. 加载所有方案
+        loadSchemes();
 
-        // 设置开关监听器
-        swAutoClick.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
-            if (isChecked && isConfigValid()) {
-                showAutoStartCountdown(); // 改为显示倒计时对话框
-            } else if (isChecked) {
-                swAutoClick.setChecked(false);
-                Toast.makeText(this, "请先配置应用和操作步骤", Toast.LENGTH_SHORT).show();
-            }
-        });
+        // 4. 设置方案选择监听器
+        setupSchemeSelector();
 
-        btnSelectApp.setOnClickListener(v -> selectApp());
-        btnAddOperation.setOnClickListener(v -> showOperationDialog(null));
-
-        // 应用启动时的自动执行检查（修复：临时禁用监听器）
-        if (sharedPreferences.getBoolean(KEY_AUTO_CLICK, false)) {
-            // 临时禁用监听器，避免触发两次
-            swAutoClick.setOnCheckedChangeListener(null);
-            swAutoClick.setChecked(true);
-            swAutoClick.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
-                if (isChecked && isConfigValid()) {
-                    showAutoStartCountdown();
-                } else if (isChecked) {
-                    swAutoClick.setChecked(false);
-                    Toast.makeText(this, "请先配置应用和操作步骤", Toast.LENGTH_SHORT).show();
-                }
-            });
-
-            if (isConfigValid()) {
-                showAutoStartCountdown(); // 改为显示倒计时对话框
-            } else {
-                swAutoClick.setChecked(false);
-                sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
-                Toast.makeText(this, "请先配置应用和操作步骤", Toast.LENGTH_SHORT).show();
-            }
-        }
+        // 5. 设置自动执行开关监听器
+        setupAutoClickSwitchListener();
     }
-
+    //////////////////////////
     private void initViews() {
-        // 确保 sharedPreferences 已初始化
-        if (sharedPreferences == null) {
-            sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        }
-
+        // 基本视图初始化
         etAppActivity = findViewById(R.id.et_app_activity);
         swAutoClick = findViewById(R.id.sw_auto_click);
         btnSelectApp = findViewById(R.id.btn_select_app);
         btnAddOperation = findViewById(R.id.btn_add_operation);
         lvOperations = findViewById(R.id.lv_operations);
+        btnSettings = findViewById(R.id.btn_settings);
+        tvRootStatus = findViewById(R.id.tv_root_status);
+
+        // 操作列表初始化
         operationAdapter = new OperationAdapter(this, operations);
         lvOperations.setAdapter(operationAdapter);
 
-        btnSettings = findViewById(R.id.btn_settings);
+        // 方案管理视图初始化
+        spSchemeSelector = findViewById(R.id.sp_scheme_selector);
+        btnNewScheme = findViewById(R.id.btn_new_scheme);
+        btnSaveScheme = findViewById(R.id.btn_save_scheme);
+        btnDeleteScheme = findViewById(R.id.btn_delete_scheme);
+
+        // 执行完成操作区域初始化
+        LinearLayout layoutCompletionActions = findViewById(R.id.layout_completion_actions);
+        if (layoutCompletionActions != null) {
+            swStopAppsEnabled = layoutCompletionActions.findViewById(R.id.sw_stop_apps_enabled);
+            btnSelectAppsToStop = layoutCompletionActions.findViewById(R.id.btn_select_apps_to_stop);
+        }
+
+        // 设置按钮点击监听器
         btnSettings.setOnClickListener(v -> showSettingsDialog());
 
-        tvRootStatus = findViewById(R.id.tv_root_status);
         tvRootStatus.setOnClickListener(v -> {
             if (!hasRootPermission) {
                 requestRootPermission();
             }
         });
 
-        // 在执行完成操作区域添加控件
-        LinearLayout layoutCompletionActions = findViewById(R.id.layout_completion_actions);
-        swStopAppsEnabled = layoutCompletionActions.findViewById(R.id.sw_stop_apps_enabled);
-        btnSelectAppsToStop = layoutCompletionActions.findViewById(R.id.btn_select_apps_to_stop);
+        btnSelectApp.setOnClickListener(v -> selectApp());
+        btnAddOperation.setOnClickListener(v -> showOperationDialog(null));
 
-        // 加载保存的状态
-        swStopAppsEnabled.setChecked(sharedPreferences.getBoolean(KEY_STOP_APPS_ENABLED, false));
-        String savedApps = sharedPreferences.getString(KEY_STOP_APPS, "");
-        if (!savedApps.isEmpty()) {
-            selectedAppsToStop = new ArrayList<>(Arrays.asList(savedApps.split(",")));
+        // 方案操作按钮监听器
+        btnNewScheme.setOnClickListener(v -> createNewScheme());
+        btnSaveScheme.setOnClickListener(v -> saveCurrentSchemeWithToast());
+        btnDeleteScheme.setOnClickListener(v -> deleteCurrentScheme());
+
+        // 执行完成操作监听器
+        if (swStopAppsEnabled != null) {
+            swStopAppsEnabled.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (currentScheme != null) {
+                    currentScheme.stopAppsEnabled = isChecked;
+                    saveCurrentScheme();
+                }
+                if (btnSelectAppsToStop != null) {
+                    btnSelectAppsToStop.setEnabled(isChecked);
+                }
+            });
         }
 
-        // 设置监听器
-        swStopAppsEnabled.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            sharedPreferences.edit().putBoolean(KEY_STOP_APPS_ENABLED, isChecked).apply();
-            btnSelectAppsToStop.setEnabled(isChecked);
-        });
+        if (btnSelectAppsToStop != null) {
+            btnSelectAppsToStop.setOnClickListener(v -> showAppSelectionDialog());
+        }
 
-        btnSelectAppsToStop.setOnClickListener(v -> showAppSelectionDialog());
-
-        // 初始状态
-        btnSelectAppsToStop.setEnabled(swStopAppsEnabled.isChecked());
-
-        // 在执行完成操作区域添加控件
-        swSelfKill = layoutCompletionActions.findViewById(R.id.sw_self_kill);
-
-        // 加载自杀开关状态
-        swSelfKill.setChecked(sharedPreferences.getBoolean(KEY_SELF_KILL, false));
-
-        // 设置监听器
-        swSelfKill.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            sharedPreferences.edit().putBoolean(KEY_SELF_KILL, isChecked).apply();
+        // 操作列表点击监听
+        lvOperations.setOnItemClickListener((parent, view, position, id) -> {
+            Operation op = operations.get(position);
+            showOperationDialog(op);
         });
     }
 
+    private void saveCurrentSchemeWithToast() {
+        if (currentScheme != null) {
+            saveCurrentScheme();
+            Toast.makeText(this, "方案 '" + currentScheme.name + "' 已保存", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "没有可保存的方案", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void setupAutoClickSwitchListener() {
+        if (swAutoClick == null) return;
+
+        // 先移除所有监听器
+        swAutoClick.setOnCheckedChangeListener(null);
+
+        // 创建监听器实例
+        CompoundButton.OnCheckedChangeListener autoClickListener = new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
+                if (isChecked) {
+                    if (isConfigValid()) {
+                        showAutoStartCountdown();
+                    } else {
+                        // 临时移除监听器避免递归
+                        swAutoClick.setOnCheckedChangeListener(null);
+                        swAutoClick.setChecked(false);
+                        swAutoClick.setOnCheckedChangeListener(this);
+                        Toast.makeText(MainActivity.this, "请先配置应用和操作步骤", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        };
+
+        // 设置监听器
+        swAutoClick.setOnCheckedChangeListener(autoClickListener);
+
+        // 处理启动时的自动执行状态
+        boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
+        swAutoClick.setChecked(autoClickEnabled);
+
+        // 不需要在这里再次调用showAutoStartCountdown()，因为设置checked会触发监听器
+        if (autoClickEnabled && !isConfigValid()) {
+            // 配置无效时关闭自动执行
+            sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
+            swAutoClick.setChecked(false);
+            Toast.makeText(this, "自动执行已关闭：配置无效", Toast.LENGTH_SHORT).show();
+        }
+    }
+    // 修改方案选择监听器
+    private void setupSchemeSelector() {
+        spSchemeSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                // 保存当前方案更改
+                saveCurrentScheme();
+
+                // 切换到新选择的方案
+                currentScheme = schemes.get(position);
+                loadCurrentScheme();
+
+                // 更新自动执行开关状态
+                boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
+                swAutoClick.setChecked(autoClickEnabled);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+    // 修改loadSchemes方法
+    private void loadSchemes() {
+        String schemesJson = sharedPreferences.getString(KEY_SCHEMES, "");
+        if (!TextUtils.isEmpty(schemesJson)) {
+            schemes = Scheme.fromJsonArray(schemesJson);
+        } else {
+            // 默认创建一个空方案
+            Scheme defaultScheme = new Scheme("默认方案");
+            schemes.add(defaultScheme);
+        }
+
+        // 加载上次选择的方案
+        String lastSchemeName = sharedPreferences.getString(KEY_CURRENT_SCHEME, "");
+        currentScheme = findSchemeByName(lastSchemeName);
+
+        // 如果没有上次选择的方案或找不到，使用第一个方案
+        if (currentScheme == null && !schemes.isEmpty()) {
+            currentScheme = schemes.get(0);
+        }
+
+        // 修复点：确保selectedAppsToStop与当前方案同步
+        selectedAppsToStop.clear();
+        if (currentScheme != null && currentScheme.appsToStop != null) {
+            selectedAppsToStop.addAll(currentScheme.appsToStop);
+        } else {
+            // 兼容旧版本：从单独的KEY_STOP_APPS加载
+            String savedApps = sharedPreferences.getString(KEY_STOP_APPS, "");
+            if (!savedApps.isEmpty()) {
+                selectedAppsToStop.addAll(Arrays.asList(savedApps.split(",")));
+                if (currentScheme != null) {
+                    currentScheme.appsToStop = new ArrayList<>(selectedAppsToStop);
+                }
+            }
+        }
+
+        updateSchemeSpinner();
+        loadCurrentScheme();
+    }
+
+    private Scheme findSchemeByName(String name) {
+        for (Scheme scheme : schemes) {
+            if (scheme.name.equals(name)) {
+                return scheme;
+            }
+        }
+        return null;
+    }
+
+    private void updateSchemeSpinner() {
+        List<String> schemeNames = new ArrayList<>();
+        for (Scheme scheme : schemes) {
+            schemeNames.add(scheme.name);
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, schemeNames);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spSchemeSelector.setAdapter(adapter);
+
+        // 设置当前选中的方案
+        if (currentScheme != null) {
+            int position = schemes.indexOf(currentScheme);
+            if (position >= 0) {
+                spSchemeSelector.setSelection(position);
+            }
+        }
+    }
+
+// 在MainActivity.java中添加或修改以下方法
+
+    private void loadCurrentScheme() {
+        if (currentScheme == null) return;
+
+        // 更新UI显示当前方案的配置
+        etAppActivity.setText(currentScheme.appName);
+        operations.clear();
+        operations.addAll(currentScheme.operations);
+        operationAdapter.notifyDataSetChanged();
+
+        // 更新执行完成操作设置
+        if (swStopAppsEnabled != null) {
+            swStopAppsEnabled.setChecked(currentScheme.stopAppsEnabled);
+            btnSelectAppsToStop.setEnabled(currentScheme.stopAppsEnabled);
+        }
+
+        // 确保selectedAppsToStop与当前方案的appsToStop同步
+        selectedAppsToStop.clear();
+        selectedAppsToStop.addAll(currentScheme.appsToStop);
+
+
+        // 更新SharedPreferences中的当前方案
+        sharedPreferences.edit()
+                .putString(KEY_APP_ACTIVITY, currentScheme.appActivity)
+                .putString(KEY_APP_NAME, currentScheme.appName)
+                .putString(KEY_OPERATIONS, Operation.toJsonArray(currentScheme.operations))
+                .putBoolean(KEY_STOP_APPS_ENABLED, currentScheme.stopAppsEnabled)
+                .putString(KEY_STOP_APPS, TextUtils.join(",", currentScheme.appsToStop))
+                .putString(KEY_CURRENT_SCHEME, currentScheme.name)
+                .apply();
+    }
+
+
+    // 修改saveCurrentScheme方法
+    private void saveCurrentScheme() {
+        if (currentScheme == null) return;
+
+        // 从UI获取最新配置
+        currentScheme.appName = etAppActivity.getText().toString();
+        currentScheme.appActivity = sharedPreferences.getString(KEY_APP_ACTIVITY, "");
+        currentScheme.operations = new ArrayList<>(operations);
+        currentScheme.stopAppsEnabled = swStopAppsEnabled != null && swStopAppsEnabled.isChecked();
+
+
+        currentScheme.appsToStop = new ArrayList<>(selectedAppsToStop);
+
+        // 保存到SharedPreferences
+        sharedPreferences.edit()
+                .putString(KEY_APP_ACTIVITY, currentScheme.appActivity)
+                .putString(KEY_APP_NAME, currentScheme.appName)
+                .putString(KEY_OPERATIONS, Operation.toJsonArray(currentScheme.operations))
+                .putBoolean(KEY_STOP_APPS_ENABLED, currentScheme.stopAppsEnabled)
+                .putString(KEY_STOP_APPS, TextUtils.join(",", currentScheme.appsToStop))
+                .putString(KEY_CURRENT_SCHEME, currentScheme.name)
+                .apply();
+
+        // 保存所有方案
+        saveAllSchemes();
+    }
+
+    private void saveAllSchemes() {
+        // 确保当前方案的appsToStop与selectedAppsToStop同步
+        if (currentScheme != null) {
+            currentScheme.appsToStop = new ArrayList<>(selectedAppsToStop);
+        }
+
+        // 保存到SharedPreferences
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(KEY_SCHEMES, Scheme.toJsonArray(schemes));
+
+        // 单独保存stop_apps以便兼容旧版本
+        if (currentScheme != null && !currentScheme.appsToStop.isEmpty()) {
+            editor.putString(KEY_STOP_APPS, TextUtils.join(",", currentScheme.appsToStop));
+        } else {
+            editor.remove(KEY_STOP_APPS);
+        }
+
+        editor.putString(KEY_CURRENT_SCHEME, currentScheme != null ? currentScheme.name : "");
+        editor.apply();
+    }
+
+    private void createNewScheme() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_new_scheme, null);
+        EditText etSchemeName = dialogView.findViewById(R.id.et_scheme_name);
+
+        new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setTitle("新建方案")
+                .setPositiveButton("确定", (dialog, which) -> {
+                    String name = etSchemeName.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        Toast.makeText(this, "方案名称不能为空", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    // 检查名称是否已存在
+                    if (findSchemeByName(name) != null) {
+                        Toast.makeText(this, "方案名称已存在", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    // 保存当前方案
+                    saveCurrentScheme();
+
+                    // 创建新方案 - 清空所有配置
+                    Scheme newScheme = new Scheme(name);
+                    // 清空选择的应用列表
+                    newScheme.appsToStop = new ArrayList<>();
+                    selectedAppsToStop.clear();
+
+                    schemes.add(newScheme);
+                    currentScheme = newScheme;
+
+                    // 更新UI
+                    updateSchemeSpinner();
+                    loadCurrentScheme();
+
+                    Toast.makeText(this, "新建方案成功", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void deleteCurrentScheme() {
+        if (currentScheme == null || schemes.size() <= 1) {
+            Toast.makeText(this, "至少保留一个方案", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("删除方案")
+                .setMessage("确定要删除方案 '" + currentScheme.name + "' 吗?")
+                .setPositiveButton("删除", (dialog, which) -> {
+                    int position = schemes.indexOf(currentScheme);
+                    schemes.remove(currentScheme);
+
+                    // 选择另一个方案
+                    if (position >= schemes.size()) {
+                        position = schemes.size() - 1;
+                    }
+                    currentScheme = schemes.get(position);
+
+                    // 更新UI
+                    updateSchemeSpinner();
+                    loadCurrentScheme();
+                    saveAllSchemes();
+
+                    Toast.makeText(this, "方案已删除", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private boolean isConfigValid() {
+        if (currentScheme == null) {
+            return false;
+        }
+
+        boolean hasValidConfig = !TextUtils.isEmpty(currentScheme.appActivity)
+                && !currentScheme.operations.isEmpty();
+
+        if (!hasValidConfig) {
+            if (TextUtils.isEmpty(currentScheme.appActivity)) {
+                Toast.makeText(this, "请先选择目标应用", Toast.LENGTH_SHORT).show();
+            } else if (currentScheme.operations.isEmpty()) {
+                Toast.makeText(this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
+            }
+        }
+
+        return hasValidConfig;
+    }
+
     private void showAutoStartCountdown() {
+        if (swAutoClick == null || !swAutoClick.isChecked()) return;
+
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_countdown, null);
         TextView tvCountdown = dialogView.findViewById(R.id.tv_countdown);
@@ -195,7 +491,7 @@ public class MainActivity extends AppCompatActivity {
         builder.setCancelable(false);
         AlertDialog dialog = builder.create();
 
-        final int[] countdown = {3}; // 倒计时3秒
+        final int[] countdown = {3};
         final Handler countdownHandler = new Handler();
 
         Runnable countdownRunnable = new Runnable() {
@@ -215,8 +511,9 @@ public class MainActivity extends AppCompatActivity {
 
         btnStop.setOnClickListener(v -> {
             countdownHandler.removeCallbacks(countdownRunnable);
-            swAutoClick.setChecked(false);
-            // 关键修复：更新 SharedPreferences，防止下次启动再次触发
+            if (swAutoClick != null) {
+                swAutoClick.setChecked(false);
+            }
             sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
             dialog.dismiss();
         });
@@ -225,172 +522,52 @@ public class MainActivity extends AppCompatActivity {
         countdownHandler.post(countdownRunnable);
     }
 
-    // 添加显示应用选择对话框的方法
-    private void showAppSelectionDialog() {
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+    private void startAutoClick() {
+        handler.postDelayed(this::performOperations, 1000);
+    }
 
-        PackageManager pm = getPackageManager();
-        List<ResolveInfo> apps = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL);
-        String currentPackage = getPackageName(); // 获取本应用包名
-
-        if (apps.isEmpty()) {
-            Toast.makeText(this, "未找到可启动的应用", Toast.LENGTH_SHORT).show();
+    private void performOperations() {
+        if (swAutoClick == null || !swAutoClick.isChecked() || !hasRootPermission() || currentScheme == null) {
             return;
         }
 
-        List<String> appNames = new ArrayList<>();
-        final List<String> appPackages = new ArrayList<>();
-        final boolean[] checkedItems = new boolean[apps.size()];
-
-        for (int i = 0; i < apps.size(); i++) {
-            ResolveInfo info = apps.get(i);
-            // 排除本应用
-            if (!info.activityInfo.packageName.equals(currentPackage)) {
-                appNames.add(info.loadLabel(pm).toString());
-                appPackages.add(info.activityInfo.packageName);
-                // 检查是否已选中
-                checkedItems[i] = selectedAppsToStop.contains(info.activityInfo.packageName);
-            }
-        }
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                .setTitle("选择要停止的应用")
-                .setMultiChoiceItems(appNames.toArray(new String[0]), checkedItems,
-                        (dialog, which, isChecked) -> checkedItems[which] = isChecked)
-                .setPositiveButton("确定", (dialog, which) -> {
-                    selectedAppsToStop.clear();
-                    for (int i = 0; i < checkedItems.length; i++) {
-                        if (checkedItems[i]) {
-                            selectedAppsToStop.add(appPackages.get(i));
-                        }
-                    }
-                    // 保存选择
-                    sharedPreferences.edit()
-                            .putString(KEY_STOP_APPS, TextUtils.join(",", selectedAppsToStop))
-                            .apply();
-                })
-                .setNegativeButton("取消", null);
-
-        builder.show();
-    }
-
-    // 修改停止应用的方法
-    private void stopSelectedApps() {
-        if (selectedAppsToStop.isEmpty()) {
-            Toast.makeText(this, "未选择要停止的应用", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        try {
-            for (String packageName : selectedAppsToStop) {
-                Runtime.getRuntime().exec("su -c am force-stop " + packageName);
-            }
-            Toast.makeText(this, "已停止" + selectedAppsToStop.size() + "个应用", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "停止应用失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void checkRootPermission() {
         new Thread(() -> {
-            hasRootPermission = hasRootPermission();
-            runOnUiThread(() -> updateRootStatusUI());
+            try {
+                int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
+                int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
+
+                Runtime.getRuntime().exec("su -c am start -n " + currentScheme.appActivity);
+
+                for (Operation op : currentScheme.operations) {
+                    Thread.sleep(op.delay);
+                    if (op.type == Operation.TYPE_CLICK) {
+                        // 使用设置的点击持续时间
+                        Runtime.getRuntime().exec(
+                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
+                                        op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
+                    } else {
+                        // 使用设置的滑动持续时间
+                        Runtime.getRuntime().exec(
+                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
+                                        op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
+                    }
+                }
+
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "操作流程执行完成", Toast.LENGTH_SHORT).show();
+
+                    if (currentScheme.stopAppsEnabled) {
+                        stopSelectedApps();
+                    }
+
+                });
+            } catch (Exception e) {
+                runOnUiThread(() ->
+                        Toast.makeText(this, "错误: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
         }).start();
     }
 
-    private void updateRootStatusUI() {
-        if (hasRootPermission) {
-            tvRootStatus.setText("ROOT已获取");
-            tvRootStatus.setBackgroundColor(Color.parseColor("#FF4CAF50")); // 绿色
-        } else {
-            tvRootStatus.setText("ROOT未获取（点我获取）");
-            tvRootStatus.setBackgroundColor(Color.parseColor("#FFF44336")); // 红色
-        }
-    }
-
-    private void requestRootPermission() {
-        new AlertDialog.Builder(this)
-                .setTitle("申请ROOT权限")
-                .setMessage("此功能需要ROOT权限才能正常工作，是否现在申请？")
-                .setPositiveButton("申请", (dialog, which) -> {
-                    checkRootPermission();
-                    Toast.makeText(this, "正在尝试获取ROOT权限...（部分su软件可能需要打开应用给与权限）", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("取消", null)
-                .show();
-    }
-    // 添加设置对话框方法
-    private void showSettingsDialog() {
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null);
-
-        EditText etClickDuration = dialogView.findViewById(R.id.et_click_duration);
-        EditText etSwipeDuration = dialogView.findViewById(R.id.et_swipe_duration);
-
-        // 加载当前设置
-        etClickDuration.setText(String.valueOf(
-                sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION)));
-        etSwipeDuration.setText(String.valueOf(
-                sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION)));
-
-        new AlertDialog.Builder(this)
-                .setView(dialogView)
-                .setTitle("触控速度设置")
-                .setPositiveButton("保存", (dialog, which) -> {
-                    try {
-                        int clickDuration = Integer.parseInt(etClickDuration.getText().toString());
-                        int swipeDuration = Integer.parseInt(etSwipeDuration.getText().toString());
-
-                        sharedPreferences.edit()
-                                .putInt(KEY_CLICK_DURATION, clickDuration)
-                                .putInt(KEY_SWIPE_DURATION, swipeDuration)
-                                .apply();
-
-                        Toast.makeText(this, "速度设置已保存", Toast.LENGTH_SHORT).show();
-                    } catch (NumberFormatException e) {
-                        Toast.makeText(this, "请输入有效的数值", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-
-    private void loadConfig() {
-        // 加载应用名称
-        etAppActivity.setText(sharedPreferences.getString(KEY_APP_NAME, ""));
-
-        String operationsJson = sharedPreferences.getString(KEY_OPERATIONS, "");
-        if (!TextUtils.isEmpty(operationsJson)) {
-            operations = Operation.fromJsonArray(operationsJson);
-            operationAdapter.clear();  // 清空现有数据
-            operationAdapter.addAll(operations);  // 添加新的操作步骤
-            operationAdapter.notifyDataSetChanged();  // 刷新适配器
-        } else {
-            operations.clear();
-            operationAdapter.notifyDataSetChanged();  // 刷新适配器
-        }
-    }
-
-
-
-    private void saveConfig() {
-        String operationsJson = Operation.toJsonArray(operations);
-        sharedPreferences.edit()
-                .putString(KEY_OPERATIONS, operationsJson)
-                .apply();
-        Log.d("MainActivity", "保存操作步骤: " + operationsJson);
-        loadConfig();
-        Toast.makeText(this, "操作步骤已保存", Toast.LENGTH_SHORT).show();
-    }
-
-
-    private boolean isConfigValid() {
-        return !TextUtils.isEmpty(sharedPreferences.getString(KEY_APP_ACTIVITY, ""))
-                && !operations.isEmpty();
-    }
-
-    //TODO 选择app
     private void selectApp() {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -416,6 +593,11 @@ public class MainActivity extends AppCompatActivity {
 
         builder.setItems(appNames.toArray(new String[0]), (dialog, which) -> {
             etAppActivity.setText(appNames.get(which));
+            if (currentScheme != null) {
+                currentScheme.appName = appNames.get(which);
+                currentScheme.appActivity = appActivities.get(which);
+                saveCurrentScheme();
+            }
             sharedPreferences.edit()
                     .putString(KEY_APP_ACTIVITY, appActivities.get(which))
                     .putString(KEY_APP_NAME, appNames.get(which))
@@ -425,12 +607,11 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    public void showOperationDialog(Operation operation) {
+    void showOperationDialog(Operation operation) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_operation, null);
 
-        // 初始化视图
         Spinner spType = dialogView.findViewById(R.id.sp_type);
-        @SuppressLint({"MissingInflatedId", "LocalSuppress"}) TextView tvStartPoint = dialogView.findViewById(R.id.tv_start_point);
+        TextView tvStartPoint = dialogView.findViewById(R.id.tv_start_point);
         LinearLayout layoutEndPoint = dialogView.findViewById(R.id.layout_end_point);
         LinearLayout layoutXy2 = dialogView.findViewById(R.id.layout_xy2);
         EditText etDelay = dialogView.findViewById(R.id.et_delay);
@@ -438,8 +619,7 @@ public class MainActivity extends AppCompatActivity {
         EditText etY1 = dialogView.findViewById(R.id.et_y1);
         EditText etX2 = dialogView.findViewById(R.id.et_x2);
         EditText etY2 = dialogView.findViewById(R.id.et_y2);
-
-        // 设置类型选择监听
+////////////////////////////
         spType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -453,7 +633,6 @@ public class MainActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
 
-        // 如果编辑已有操作，填充数据
         if (operation != null) {
             spType.setSelection(operation.type == Operation.TYPE_CLICK ? 0 : 1);
             etDelay.setText(String.valueOf(operation.delay));
@@ -487,7 +666,7 @@ public class MainActivity extends AppCompatActivity {
                             operations.set(operations.indexOf(operation), op);
                         }
                         operationAdapter.notifyDataSetChanged();
-                        saveConfig();
+                        saveCurrentScheme();
                     } catch (NumberFormatException e) {
                         Toast.makeText(this, "请输入有效的数值", Toast.LENGTH_SHORT).show();
                     }
@@ -498,85 +677,143 @@ public class MainActivity extends AppCompatActivity {
             builder.setNeutralButton("删除", (dialog, which) -> {
                 operations.remove(operation);
                 operationAdapter.notifyDataSetChanged();
-                saveConfig();
+                saveCurrentScheme();
             });
         }
 
         AlertDialog dialog = builder.create();
         dialog.show();
 
-        // 初始UI状态
         boolean isClick = spType.getSelectedItemPosition() == 0;
         tvStartPoint.setText(isClick ? "点击坐标:" : "起始坐标:");
         layoutEndPoint.setVisibility(isClick ? View.GONE : View.VISIBLE);
         layoutXy2.setVisibility(isClick ? View.GONE : View.VISIBLE);
     }
 
-    private void startAutoClick() {
-        handler.postDelayed(this::performOperations, 1000);
-    }
+    private void showAppSelectionDialog() {
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
 
-    // 修改performOperations方法，使用设置的速度
-    private void performOperations() {
-        if (!swAutoClick.isChecked() || !hasRootPermission()) {
+        PackageManager pm = getPackageManager();
+        List<ResolveInfo> apps = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL);
+        String currentPackage = getPackageName();
+
+        if (apps.isEmpty()) {
+            Toast.makeText(this, "未找到可启动的应用", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        new Thread(() -> {
-            try {
-                int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
-                int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
+        List<String> appNames = new ArrayList<>();
+        final List<String> appPackages = new ArrayList<>();
+        final boolean[] checkedItems = new boolean[apps.size()];
 
-                String appActivity = sharedPreferences.getString(KEY_APP_ACTIVITY, "");
-                Runtime.getRuntime().exec("su -c am start -n " + appActivity);
+        for (int i = 0; i < apps.size(); i++) {
+            ResolveInfo info = apps.get(i);
+            appNames.add(info.loadLabel(pm).toString());
+            appPackages.add(info.activityInfo.packageName);
+            checkedItems[i] = selectedAppsToStop.contains(info.activityInfo.packageName);
+        }
 
-                for (Operation op : operations) {
-                    Thread.sleep(op.delay);
-                    if (op.type == Operation.TYPE_CLICK) {
-                        // 使用设置的点击持续时间
-                        Runtime.getRuntime().exec(
-                                "su -c input tap " + op.x1 + " " + op.y1).waitFor();
-                        // 如果需要更精确控制点击时长，可以使用:
-                        // "su -c input swipe " + op.x1 + " " + op.y1 + " " +
-                        // op.x1 + " " + op.y1 + " " + clickDuration
-                    } else {
-                        // 使用设置的滑动持续时间
-                        Runtime.getRuntime().exec(
-                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
-                                        op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("选择要停止的应用")
+                .setMultiChoiceItems(appNames.toArray(new String[0]), checkedItems,
+                        (dialog, which, isChecked) -> checkedItems[which] = isChecked)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    // 更新selectedAppsToStop
+                    selectedAppsToStop.clear();
+                    for (int i = 0; i < checkedItems.length; i++) {
+                        if (checkedItems[i]) {
+                            selectedAppsToStop.add(appPackages.get(i));
+                        }
                     }
-                }
-
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "操作流程执行完成", Toast.LENGTH_SHORT).show();
-
-                    // 执行完成后的操作
-                    if (swStopAppsEnabled.isChecked()) {
-                        stopSelectedApps();
+                    // 同步到当前方案并保存
+                    if (currentScheme != null) {
+                        currentScheme.appsToStop = new ArrayList<>(selectedAppsToStop);
+                        saveAllSchemes(); // 确保立即保存
                     }
+                    Toast.makeText(MainActivity.this, "已选择 " + selectedAppsToStop.size() + " 个应用", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null);
 
-                    // 最后执行自杀
-                    if (swSelfKill.isChecked()) {
-                        selfKill();
-                    }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() ->
-                        Toast.makeText(this, "错误: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+        builder.show();
+    }
+
+    private void stopSelectedApps() {
+        if (selectedAppsToStop.isEmpty()) {
+            Toast.makeText(this, "未选择要停止的应用", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            for (String packageName : selectedAppsToStop) {
+                Runtime.getRuntime().exec("su -c am force-stop " + packageName);
             }
+            Toast.makeText(this, "已停止" + selectedAppsToStop.size() + "个应用", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "停止应用失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showSettingsDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null);
+
+        EditText etClickDuration = dialogView.findViewById(R.id.et_click_duration);
+        EditText etSwipeDuration = dialogView.findViewById(R.id.et_swipe_duration);
+
+        etClickDuration.setText(String.valueOf(
+                sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION)));
+        etSwipeDuration.setText(String.valueOf(
+                sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION)));
+
+        new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setTitle("触控速度设置")
+                .setPositiveButton("保存", (dialog, which) -> {
+                    try {
+                        int clickDuration = Integer.parseInt(etClickDuration.getText().toString());
+                        int swipeDuration = Integer.parseInt(etSwipeDuration.getText().toString());
+
+                        sharedPreferences.edit()
+                                .putInt(KEY_CLICK_DURATION, clickDuration)
+                                .putInt(KEY_SWIPE_DURATION, swipeDuration)
+                                .apply();
+
+                        Toast.makeText(this, "速度设置已保存", Toast.LENGTH_SHORT).show();
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(this, "请输入有效的数值", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void checkRootPermission() {
+        new Thread(() -> {
+            hasRootPermission = hasRootPermission();
+            runOnUiThread(() -> updateRootStatusUI());
         }).start();
     }
-    // 添加自杀方法
-    private void selfKill() {
-        try {
-            // 先停止自己
-            Runtime.getRuntime().exec("su -c am force-stop " + getPackageName());
-            // 再杀死进程
-            android.os.Process.killProcess(android.os.Process.myPid());
-            System.exit(0);
-        } catch (Exception e) {
-            Toast.makeText(this, "自杀失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+
+    private void updateRootStatusUI() {
+        if (hasRootPermission) {
+            tvRootStatus.setText("ROOT已获取");
+            tvRootStatus.setBackgroundColor(Color.parseColor("#FF4CAF50"));
+        } else {
+            tvRootStatus.setText("ROOT未获取（点我获取）");
+            tvRootStatus.setBackgroundColor(Color.parseColor("#FFF44336"));
         }
+    }
+
+    private void requestRootPermission() {
+        new AlertDialog.Builder(this)
+                .setTitle("申请ROOT权限")
+                .setMessage("此功能需要ROOT权限才能正常工作，是否现在申请？")
+                .setPositiveButton("申请", (dialog, which) -> {
+                    checkRootPermission();
+                    Toast.makeText(this, "正在尝试获取ROOT权限...（部分su软件可能需要打开应用给与权限）", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private boolean hasRootPermission() {
