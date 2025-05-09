@@ -99,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         // 5. 设置自动执行开关监听器
         setupAutoClickSwitchListener();
     }
-    //////////////////////////
+
     private void initViews() {
         // 基本视图初始化
         etAppActivity = findViewById(R.id.et_app_activity);
@@ -619,7 +619,7 @@ public class MainActivity extends AppCompatActivity {
         EditText etY1 = dialogView.findViewById(R.id.et_y1);
         EditText etX2 = dialogView.findViewById(R.id.et_x2);
         EditText etY2 = dialogView.findViewById(R.id.et_y2);
-////////////////////////////
+
         spType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -696,7 +696,6 @@ public class MainActivity extends AppCompatActivity {
 
         PackageManager pm = getPackageManager();
         List<ResolveInfo> apps = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL);
-        String currentPackage = getPackageName();
 
         if (apps.isEmpty()) {
             Toast.makeText(this, "未找到可启动的应用", Toast.LENGTH_SHORT).show();
