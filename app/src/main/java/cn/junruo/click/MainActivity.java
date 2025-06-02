@@ -33,7 +33,7 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String PREFS_NAME = "ClickConfig";
+    private static final String PREFS_NAME = "ClickConfig";// SharedPreferences 文件名
     private static final String KEY_APP_ACTIVITY = "app_activity";
     private static final String KEY_APP_NAME = "app_name";
     private static final String KEY_OPERATIONS = "operations";
@@ -44,15 +44,15 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SWIPE_DURATION = "swipe_duration";
     private static final String KEY_STOP_APPS = "stop_apps";
     private static final String KEY_STOP_APPS_ENABLED = "stop_apps_enabled";
-    private static final int DEFAULT_CLICK_DURATION = 50;
-    private static final int DEFAULT_SWIPE_DURATION = 100;
+    private static final int DEFAULT_CLICK_DURATION = 50;// 默认点击持续时间
+    private static final int DEFAULT_SWIPE_DURATION = 100;// 默认滑动持续时间
 
     // UI 组件
-    private EditText etAppActivity;
-    private Switch swAutoClick;
+    private EditText etAppActivity;// 显示/输入目标应用名
+    private Switch swAutoClick;// 是否启用自动执行
     private Button btnSelectApp;
     private Button btnAddOperation;
-    private ListView lvOperations;
+    private ListView lvOperations;// 操作步骤列表
     private Button btnSettings;
     private TextView tvRootStatus;
     private Switch swStopAppsEnabled;
@@ -64,11 +64,11 @@ public class MainActivity extends AppCompatActivity {
 
     private final Handler handler = new Handler();
     private SharedPreferences sharedPreferences;
-    private ArrayList<Operation> operations = new ArrayList<>();
+    private ArrayList<Operation> operations = new ArrayList<>();// 当前方案的操作步骤
     private OperationAdapter operationAdapter;
     private ArrayList<Scheme> schemes = new ArrayList<>();
-    private Scheme currentScheme;
-    private boolean hasRootPermission = false;
+    private Scheme currentScheme;// 当前选中的方案
+    private boolean hasRootPermission = false;// 是否拥有ROOT权限
     private List<String> selectedAppsToStop = new ArrayList<>();
 
     // 修改onCreate方法中的初始化顺序
@@ -77,27 +77,29 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // 设置状态栏样式
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             getWindow().setStatusBarColor(getResources().getColor(R.color.white));
             getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
 
+        // 初始化SharedPreferences
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        // 1. 初始化视图
-        initViews();
+        // 初始化UI、权限与数据
+        initViews();// 初始化控件与事件
 
-        // 2. 检查ROOT权限
-        checkRootPermission();
 
-        // 3. 加载所有方案
-        loadSchemes();
+        checkRootPermission();// 检查是否有ROOT权限
 
-        // 4. 设置方案选择监听器
-        setupSchemeSelector();
 
-        // 5. 设置自动执行开关监听器
-        setupAutoClickSwitchListener();
+        loadSchemes();// 加载已有的所有方案
+
+
+        setupSchemeSelector();// 设置方案选择器事件
+
+
+        setupAutoClickSwitchListener();// 设置自动点击开关事件
     }
 
     private void initViews() {
@@ -110,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
         btnSettings = findViewById(R.id.btn_settings);
         tvRootStatus = findViewById(R.id.tv_root_status);
 
-        // 操作列表初始化
+        // 设置适配器
         operationAdapter = new OperationAdapter(this, operations);
         lvOperations.setAdapter(operationAdapter);
 
@@ -136,8 +138,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        btnSelectApp.setOnClickListener(v -> selectApp());
-        btnAddOperation.setOnClickListener(v -> showOperationDialog(null));
+        // 设置点击事件
+        btnSelectApp.setOnClickListener(v -> selectApp());// 选择目标App
+        btnAddOperation.setOnClickListener(v -> showOperationDialog(null));// 添加操作
 
         // 方案操作按钮监听器
         btnNewScheme.setOnClickListener(v -> createNewScheme());
@@ -177,11 +180,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //自动点击开关监听逻辑
     private void setupAutoClickSwitchListener() {
         if (swAutoClick == null) return;
 
-        // 先移除所有监听器
-        swAutoClick.setOnCheckedChangeListener(null);
+        swAutoClick.setOnCheckedChangeListener(null);// 移除旧监听
 
         // 创建监听器实例
         CompoundButton.OnCheckedChangeListener autoClickListener = new CompoundButton.OnCheckedChangeListener() {
@@ -190,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
                 sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
                 if (isChecked) {
                     if (isConfigValid()) {
-                        showAutoStartCountdown();
+                        showAutoStartCountdown();// 显示3秒倒计时
                     } else {
                         // 临时移除监听器避免递归
                         swAutoClick.setOnCheckedChangeListener(null);
@@ -536,6 +539,7 @@ public class MainActivity extends AppCompatActivity {
                 int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
                 int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
 
+                // 启动目标Activity
                 Runtime.getRuntime().exec("su -c am start -n " + currentScheme.appActivity);
 
                 for (Operation op : currentScheme.operations) {
@@ -557,7 +561,7 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "操作流程执行完成", Toast.LENGTH_SHORT).show();
 
                     if (currentScheme.stopAppsEnabled) {
-                        stopSelectedApps();
+                        stopSelectedApps();// 执行完后停止应用
                     }
 
                 });

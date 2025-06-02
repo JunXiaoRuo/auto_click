@@ -1,4 +1,3 @@
-// 新建 Scheme.java 文件
 package cn.junruo.click;
 
 import org.json.JSONArray;
