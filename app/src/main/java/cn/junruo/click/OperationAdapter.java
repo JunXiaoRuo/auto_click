@@ -37,6 +37,10 @@ public class OperationAdapter extends ArrayAdapter<Operation> {
             tv1.setText("点击操作");
             tv2.setText(String.format("延迟: %dms, 坐标: (%d, %d)",
                     op.delay, op.x1, op.y1));
+        } else if (op.type == Operation.TYPE_LONG_PRESS) {
+            tv1.setText("长按操作");
+            tv2.setText(String.format("延迟: %dms, 坐标: (%d, %d)",
+                    op.delay, op.x1, op.y1));
         } else {
             tv1.setText("滑动操作");
             tv2.setText(String.format("延迟: %dms, 从 (%d, %d) 到 (%d, %d)",

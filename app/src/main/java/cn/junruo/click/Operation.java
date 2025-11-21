@@ -8,6 +8,7 @@ import java.util.ArrayList;
 public class Operation {
     public static final int TYPE_CLICK = 0;
     public static final int TYPE_SWIPE = 1;
+    public static final int TYPE_LONG_PRESS = 2;
 
     public int type;
     public int delay;
@@ -16,6 +17,7 @@ public class Operation {
 
     public static final int DEFAULT_CLICK_DURATION = 50;
     public static final int DEFAULT_SWIPE_DURATION = 100;
+    public static final int DEFAULT_LONG_PRESS_DURATION = 500;
 
     public Operation(int type, int delay, int x1, int y1, int x2, int y2) {
         this.type = type;

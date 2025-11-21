@@ -3,11 +3,15 @@ package cn.junruo.click;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
@@ -41,11 +45,21 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SCHEMES = "schemes";
     private static final String KEY_CURRENT_SCHEME = "current_scheme";
     private static final String KEY_CLICK_DURATION = "click_duration";
+    private static final String KEY_LONG_PRESS_DURATION = "long_press_duration";
     private static final String KEY_SWIPE_DURATION = "swipe_duration";
+    private static final String KEY_FALLBACK_NO_XY = "fallback_no_xy";
     private static final String KEY_STOP_APPS = "stop_apps";
     private static final String KEY_STOP_APPS_ENABLED = "stop_apps_enabled";
     private static final int DEFAULT_CLICK_DURATION = 50;// 默认点击持续时间
+    private static final int DEFAULT_LONG_PRESS_DURATION = 500;// 默认长按持续时间
     private static final int DEFAULT_SWIPE_DURATION = 100;// 默认滑动持续时间
+    private static final String KEY_TOUCH_DEVICE = "touch_device";
+    private static final String KEY_MAX_X = "max_x";
+    private static final String KEY_MAX_Y = "max_y";
+    private static final String KEY_MOVE_TOLERANCE_PX = "move_tolerance_px";
+    private static final String KEY_MOTION_THRESHOLD = "motion_threshold";
+    private static final String KEY_SHOW_DEBUG = "show_debug";
+    public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
 
     // UI 组件
     private EditText etAppActivity;// 显示/输入目标应用名
@@ -70,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
     private Scheme currentScheme;// 当前选中的方案
     private boolean hasRootPermission = false;// 是否拥有ROOT权限
     private List<String> selectedAppsToStop = new ArrayList<>();
+    private BroadcastReceiver recordingReceiver;
 
     // 修改onCreate方法中的初始化顺序
     @Override
@@ -100,6 +115,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         setupAutoClickSwitchListener();// 设置自动点击开关事件
+
+        registerRecordingReceiver();
     }
 
     private void initViews() {
@@ -108,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
         swAutoClick = findViewById(R.id.sw_auto_click);
         btnSelectApp = findViewById(R.id.btn_select_app);
         btnAddOperation = findViewById(R.id.btn_add_operation);
+        Button btnStartRecording = findViewById(R.id.btn_start_recording);
         lvOperations = findViewById(R.id.lv_operations);
         btnSettings = findViewById(R.id.btn_settings);
         tvRootStatus = findViewById(R.id.tv_root_status);
@@ -141,6 +159,7 @@ public class MainActivity extends AppCompatActivity {
         // 设置点击事件
         btnSelectApp.setOnClickListener(v -> selectApp());// 选择目标App
         btnAddOperation.setOnClickListener(v -> showOperationDialog(null));// 添加操作
+        btnStartRecording.setOnClickListener(v -> startRecordingOverlay());// 开启录制
 
         // 方案操作按钮监听器
         btnNewScheme.setOnClickListener(v -> createNewScheme());
@@ -537,6 +556,7 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
+                int longPressDuration = sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION);
                 int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
 
                 // 启动目标Activity
@@ -549,6 +569,10 @@ public class MainActivity extends AppCompatActivity {
                         Runtime.getRuntime().exec(
                                 "su -c input swipe " + op.x1 + " " + op.y1 + " " +
                                         op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
+                    } else if (op.type == Operation.TYPE_LONG_PRESS) {
+                        Runtime.getRuntime().exec(
+                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
+                                        op.x1 + " " + op.y1 + " " + longPressDuration).waitFor();
                     } else {
                         // 使用设置的滑动持续时间
                         Runtime.getRuntime().exec(
@@ -627,10 +651,10 @@ public class MainActivity extends AppCompatActivity {
         spType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                boolean isClick = position == 0;
-                tvStartPoint.setText(isClick ? "点击坐标:" : "起始坐标:");
-                layoutEndPoint.setVisibility(isClick ? View.GONE : View.VISIBLE);
-                layoutXy2.setVisibility(isClick ? View.GONE : View.VISIBLE);
+                boolean singlePoint = position == 0 || position == 1;
+                tvStartPoint.setText(singlePoint ? "点击/长按坐标:" : "起始坐标:");
+                layoutEndPoint.setVisibility(singlePoint ? View.GONE : View.VISIBLE);
+                layoutXy2.setVisibility(singlePoint ? View.GONE : View.VISIBLE);
             }
 
             @Override
@@ -638,7 +662,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         if (operation != null) {
-            spType.setSelection(operation.type == Operation.TYPE_CLICK ? 0 : 1);
+            int sel = operation.type == Operation.TYPE_CLICK ? 0 : (operation.type == Operation.TYPE_LONG_PRESS ? 1 : 2);
+            spType.setSelection(sel);
             etDelay.setText(String.valueOf(operation.delay));
             etX1.setText(String.valueOf(operation.x1));
             etY1.setText(String.valueOf(operation.y1));
@@ -653,8 +678,8 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle(operation == null ? "添加操作" : "编辑操作")
                 .setPositiveButton("保存", (dialog, which) -> {
                     try {
-                        int type = spType.getSelectedItemPosition() == 0 ?
-                                Operation.TYPE_CLICK : Operation.TYPE_SWIPE;
+                        int typeSel = spType.getSelectedItemPosition();
+                        int type = typeSel == 0 ? Operation.TYPE_CLICK : (typeSel == 1 ? Operation.TYPE_LONG_PRESS : Operation.TYPE_SWIPE);
                         int delay = Integer.parseInt(etDelay.getText().toString());
                         int x1 = Integer.parseInt(etX1.getText().toString());
                         int y1 = Integer.parseInt(etY1.getText().toString());
@@ -762,32 +787,140 @@ public class MainActivity extends AppCompatActivity {
 
         EditText etClickDuration = dialogView.findViewById(R.id.et_click_duration);
         EditText etSwipeDuration = dialogView.findViewById(R.id.et_swipe_duration);
+        EditText etLongPressDuration = dialogView.findViewById(R.id.et_long_press_duration);
+        EditText etMoveTolerancePx = dialogView.findViewById(R.id.et_move_tolerance_px);
+        EditText etMotionThreshold = dialogView.findViewById(R.id.et_motion_threshold);
+        android.widget.CheckBox cbFallbackNoXY = dialogView.findViewById(R.id.cb_fallback_no_xy);
+        android.widget.CheckBox cbShowDebug = dialogView.findViewById(R.id.cb_show_debug);
+        EditText etTouchDevice = dialogView.findViewById(R.id.et_touch_device);
+        EditText etMaxX = dialogView.findViewById(R.id.et_max_x);
+        EditText etMaxY = dialogView.findViewById(R.id.et_max_y);
+        Button btnAutoDetect = dialogView.findViewById(R.id.btn_auto_detect_device);
 
         etClickDuration.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION)));
         etSwipeDuration.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION)));
+        etLongPressDuration.setText(String.valueOf(
+                sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION)));
+        etMoveTolerancePx.setText(String.valueOf(
+                sharedPreferences.getInt(KEY_MOVE_TOLERANCE_PX, 20)));
+        etMotionThreshold.setText(String.valueOf(
+                sharedPreferences.getInt(KEY_MOTION_THRESHOLD, 9999)));
+        cbFallbackNoXY.setChecked(sharedPreferences.getBoolean(KEY_FALLBACK_NO_XY, true));
+        cbShowDebug.setChecked(sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false));
+
+        etTouchDevice.setText(sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
+        etMaxX.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_X, 0)));
+        etMaxY.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_Y, 0)));
+
+        btnAutoDetect.setOnClickListener(v -> {
+            autoDetectTouchDevice(etTouchDevice, etMaxX, etMaxY);
+        });
 
         new AlertDialog.Builder(this)
                 .setView(dialogView)
-                .setTitle("触控速度设置")
+                .setTitle("高级设置")
                 .setPositiveButton("保存", (dialog, which) -> {
                     try {
                         int clickDuration = Integer.parseInt(etClickDuration.getText().toString());
+                        int longPressDuration = Integer.parseInt(etLongPressDuration.getText().toString());
                         int swipeDuration = Integer.parseInt(etSwipeDuration.getText().toString());
+                        int moveTolerancePx = parseIntSafe(etMoveTolerancePx.getText().toString());
+                        int motionThreshold = parseIntSafe(etMotionThreshold.getText().toString());
+                        boolean showDebug = cbShowDebug.isChecked();
+                        String touchDevice = etTouchDevice.getText().toString().trim();
+                        int maxX = parseIntSafe(etMaxX.getText().toString());
+                        int maxY = parseIntSafe(etMaxY.getText().toString());
 
                         sharedPreferences.edit()
                                 .putInt(KEY_CLICK_DURATION, clickDuration)
+                                .putInt(KEY_LONG_PRESS_DURATION, longPressDuration)
                                 .putInt(KEY_SWIPE_DURATION, swipeDuration)
+                                .putInt(KEY_MOVE_TOLERANCE_PX, moveTolerancePx)
+                                .putInt(KEY_MOTION_THRESHOLD, motionThreshold)
+                                .putBoolean(KEY_FALLBACK_NO_XY, cbFallbackNoXY.isChecked())
+                                .putBoolean(KEY_SHOW_DEBUG, showDebug)
+                                .putString(KEY_TOUCH_DEVICE, touchDevice)
+                                .putInt(KEY_MAX_X, maxX)
+                                .putInt(KEY_MAX_Y, maxY)
                                 .apply();
 
-                        Toast.makeText(this, "速度设置已保存", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show();
                     } catch (NumberFormatException e) {
                         Toast.makeText(this, "请输入有效的数值", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    private int parseIntSafe(String s) {
+        try { return Integer.parseInt(s.trim()); } catch (Exception e) { return 0; }
+    }
+
+    private void startRecordingOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Intent permIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+            startActivity(permIntent);
+            Toast.makeText(this, "请授予悬浮窗权限后重试", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, RecordService.class);
+        intent.putExtra("touch_device", sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
+        intent.putExtra("max_x", sharedPreferences.getInt(KEY_MAX_X, 0));
+        intent.putExtra("max_y", sharedPreferences.getInt(KEY_MAX_Y, 0));
+        startService(intent);
+        Toast.makeText(this, "已开启悬浮球，点击开始/结束录制", Toast.LENGTH_SHORT).show();
+    }
+
+    private void autoDetectTouchDevice(EditText etTouchDevice, EditText etMaxX, EditText etMaxY) {
+        new Thread(() -> {
+            try {
+                Process p = Runtime.getRuntime().exec("su -c getevent -pl");
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+                String line;
+                String currentDevice = null;
+                String currentPath = null;
+                int foundMaxX = 0;
+                int foundMaxY = 0;
+                while ((line = br.readLine()) != null) {
+                    if (line.contains("add device") && line.contains("/dev/input/")) {
+                        int idx = line.indexOf("/dev/input/");
+                        if (idx >= 0) {
+                            currentPath = line.substring(idx).split(" ")[0].trim();
+                        }
+                        currentDevice = currentPath;
+                        foundMaxX = 0; foundMaxY = 0;
+                    } else if (line.contains("ABS_MT_POSITION_X") || line.contains("ABS X")) {
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("max\\s+(\\d+)").matcher(line);
+                        if (m.find()) {
+                            foundMaxX = Integer.parseInt(m.group(1));
+                        }
+                    } else if (line.contains("ABS_MT_POSITION_Y") || line.contains("ABS Y")) {
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("max\\s+(\\d+)").matcher(line);
+                        if (m.find()) {
+                            foundMaxY = Integer.parseInt(m.group(1));
+                        }
+                    }
+                    if (currentDevice != null && foundMaxX > 0 && foundMaxY > 0) {
+                        final String path = currentDevice;
+                        final int mx = foundMaxX;
+                        final int my = foundMaxY;
+                        runOnUiThread(() -> {
+                            etTouchDevice.setText(path);
+                            etMaxX.setText(String.valueOf(mx));
+                            etMaxY.setText(String.valueOf(my));
+                        });
+                        break;
+                    }
+                }
+                br.close();
+                p.destroy();
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "解析失败: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
     }
 
     private void checkRootPermission() {
@@ -840,5 +973,45 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         handler.removeCallbacksAndMessages(null);
+        if (recordingReceiver != null) {
+            try { unregisterReceiver(recordingReceiver); } catch (Exception ignored) {}
+        }
+    }
+
+    private void registerRecordingReceiver() {
+        recordingReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context context, Intent intent) {
+                if (ACTION_RECORDING_COMPLETE.equals(intent.getAction())) {
+                    String json = intent.getStringExtra("operations_json");
+                    String debugLog = intent.getStringExtra("debug_log");
+                    if (json != null) {
+                        ArrayList<Operation> ops = Operation.fromJsonArray(json);
+                        operations.clear();
+                        operations.addAll(ops);
+                        operationAdapter.notifyDataSetChanged();
+                        saveCurrentSchemeWithToast();
+                        Toast.makeText(MainActivity.this, "录制完成，已填入步骤", Toast.LENGTH_SHORT).show();
+                    }
+                    boolean showDebug = sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false);
+                    if (showDebug && debugLog != null && !debugLog.isEmpty()) {
+                        new android.app.AlertDialog.Builder(MainActivity.this)
+                                .setTitle("录制调试信息")
+                                .setMessage(debugLog)
+                                .setPositiveButton("复制", (d, w) -> {
+                                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                                    if (cm != null) {
+                                        cm.setPrimaryClip(android.content.ClipData.newPlainText("record_debug", debugLog));
+                                        Toast.makeText(MainActivity.this, "已复制调试信息", Toast.LENGTH_SHORT).show();
+                                    }
+                                })
+                                .setNegativeButton("关闭", null)
+                                .show();
+                    }
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(ACTION_RECORDING_COMPLETE);
+        registerReceiver(recordingReceiver, filter);
     }
 }

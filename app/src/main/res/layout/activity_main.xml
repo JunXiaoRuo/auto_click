@@ -173,6 +173,14 @@
                 android:layout_weight="1"
                 android:text="添加操作步骤"/>
 
+            <Button
+                android:id="@+id/btn_start_recording"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="录制动作"/>
+
         </LinearLayout>
         <View
             android:layout_width="match_parent"
@@ -258,7 +266,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:text="速度设置"/>
+                android:text="高级设置"/>
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

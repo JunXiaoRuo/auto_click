@@ -2,6 +2,7 @@
 <resources>
     <string-array name="operation_types">
         <item>点击操作</item>
+        <item>长按操作</item>
         <item>滑动操作</item>
     </string-array>
 </resources>
