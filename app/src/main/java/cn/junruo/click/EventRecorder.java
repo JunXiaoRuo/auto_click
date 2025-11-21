@@ -50,11 +50,29 @@ class EventRecorder {
             motionThreshold = sp.getInt("motion_threshold", 9999);
         } catch (Exception ignored) {}
         WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
-        DisplayMetrics dm = new DisplayMetrics();
-        if (wm != null && wm.getDefaultDisplay() != null) {
-            wm.getDefaultDisplay().getRealMetrics(dm);
-            screenW = dm.widthPixels;
-            screenH = dm.heightPixels;
+        try {
+            if (wm != null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
+                    screenW = b.width();
+                    screenH = b.height();
+                } else {
+                    DisplayMetrics dm = new DisplayMetrics();
+                    android.view.Display d = wm.getDefaultDisplay();
+                    if (d != null) {
+                        d.getRealMetrics(dm);
+                        screenW = dm.widthPixels;
+                        screenH = dm.heightPixels;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        if (screenW <= 0 || screenH <= 0) {
+            try {
+                DisplayMetrics dm2 = ctx.getResources().getDisplayMetrics();
+                screenW = dm2.widthPixels;
+                screenH = dm2.heightPixels;
+            } catch (Throwable ignored) {}
         }
     }
 

@@ -5,19 +5,27 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
+import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.app.NotificationManager;
+import android.Manifest;
+import androidx.core.app.ActivityCompat;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.WindowManager;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.content.ComponentName;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -29,6 +37,9 @@ import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.core.content.ContextCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
@@ -75,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
     private Button btnNewScheme;
     private Button btnSaveScheme;
     private Button btnDeleteScheme;
+    private Button btnStartRecording;
 
     private final Handler handler = new Handler();
     private SharedPreferences sharedPreferences;
@@ -125,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
         swAutoClick = findViewById(R.id.sw_auto_click);
         btnSelectApp = findViewById(R.id.btn_select_app);
         btnAddOperation = findViewById(R.id.btn_add_operation);
-        Button btnStartRecording = findViewById(R.id.btn_start_recording);
+        btnStartRecording = findViewById(R.id.btn_start_recording);
         lvOperations = findViewById(R.id.lv_operations);
         btnSettings = findViewById(R.id.btn_settings);
         tvRootStatus = findViewById(R.id.tv_root_status);
@@ -159,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
         // 设置点击事件
         btnSelectApp.setOnClickListener(v -> selectApp());// 选择目标App
         btnAddOperation.setOnClickListener(v -> showOperationDialog(null));// 添加操作
-        btnStartRecording.setOnClickListener(v -> startRecordingOverlay());// 开启录制
+        btnStartRecording.setOnClickListener(v -> toggleRecordingOverlay());
 
         // 方案操作按钮监听器
         btnNewScheme.setOnClickListener(v -> createNewScheme());
@@ -212,6 +224,39 @@ public class MainActivity extends AppCompatActivity {
                 sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
                 if (isChecked) {
                     if (isConfigValid()) {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                                boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+                                if (!ignoring) {
+                                    new AlertDialog.Builder(MainActivity.this)
+                                            .setTitle("建议关闭电池优化")
+                                            .setMessage("为保证跨应用执行流程稳定，请将本应用设为不受电池优化限制。小米设备请设置为‘无限制’。")
+                                            .setPositiveButton("去设置", (d, w) -> {
+                                                try {
+                                                    if (android.os.Build.MANUFACTURER != null && android.os.Build.MANUFACTURER.toLowerCase().contains("xiaomi")) {
+                                                        Intent miui = new Intent();
+                                                        miui.setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
+                                                        miui.putExtra("package_name", getPackageName());
+                                                        miui.putExtra("package_label", getApplicationInfo().loadLabel(getPackageManager()).toString());
+                                                        startActivity(miui);
+                                                    } else {
+                                                        Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                                        i.setData(Uri.parse("package:" + getPackageName()));
+                                                        startActivity(i);
+                                                    }
+                                                } catch (Exception e1) {
+                                                    try {
+                                                        Intent i2 = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                                                        startActivity(i2);
+                                                    } catch (Exception ignored) {}
+                                                }
+                                            })
+                                            .setNegativeButton("暂不", null)
+                                            .show();
+                                }
+                            }
+                        } catch (Exception ignored) {}
                         showAutoStartCountdown();// 显示3秒倒计时
                     } else {
                         // 临时移除监听器避免递归
@@ -553,8 +598,17 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        ensureNotificationPermission();
         new Thread(() -> {
             try {
+                try {
+                    Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(svc);
+                    } else {
+                        startService(svc);
+                    }
+                } catch (Exception ignored) {}
                 int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
                 int longPressDuration = sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION);
                 int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
@@ -593,6 +647,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() ->
                         Toast.makeText(this, "错误: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
+            try { stopService(new Intent(this, RecordService.class)); } catch (Exception ignored) {}
         }).start();
     }
 
@@ -796,6 +851,7 @@ public class MainActivity extends AppCompatActivity {
         EditText etMaxX = dialogView.findViewById(R.id.et_max_x);
         EditText etMaxY = dialogView.findViewById(R.id.et_max_y);
         Button btnAutoDetect = dialogView.findViewById(R.id.btn_auto_detect_device);
+        TextView tvScreenPx = dialogView.findViewById(R.id.tv_screen_px);
 
         etClickDuration.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION)));
@@ -814,8 +870,34 @@ public class MainActivity extends AppCompatActivity {
         etMaxX.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_X, 0)));
         etMaxY.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_Y, 0)));
 
+        try {
+            int w = 0, h = 0;
+            WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+            if (wm != null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
+                    w = b.width();
+                    h = b.height();
+                } else {
+                    DisplayMetrics dm = new DisplayMetrics();
+                    android.view.Display d = wm.getDefaultDisplay();
+                    if (d != null) {
+                        d.getRealMetrics(dm);
+                        w = dm.widthPixels;
+                        h = dm.heightPixels;
+                    }
+                }
+            }
+            if (w <= 0 || h <= 0) {
+                DisplayMetrics dm2 = getResources().getDisplayMetrics();
+                w = dm2.widthPixels;
+                h = dm2.heightPixels;
+            }
+            tvScreenPx.setText(w + " x " + h);
+        } catch (Throwable ignored) {}
+
         btnAutoDetect.setOnClickListener(v -> {
-            autoDetectTouchDevice(etTouchDevice, etMaxX, etMaxY);
+            autoDetectTouchDevice(etTouchDevice, etMaxX, etMaxY, tvScreenPx);
         });
 
         new AlertDialog.Builder(this)
@@ -860,6 +942,50 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startRecordingOverlay() {
+        String tdCheck = sharedPreferences.getString(KEY_TOUCH_DEVICE, "");
+        if (TextUtils.isEmpty(tdCheck)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("需要配置触摸设备")
+                    .setMessage("请前往高级设置，填入触摸设备路径（可使用自动解析）。")
+                    .setPositiveButton("去设置", (d, w) -> showSettingsDialog())
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+                if (!ignoring) {
+                    new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("建议关闭电池优化")
+                            .setMessage("为保证录制与跨应用执行稳定，请将本应用设为不受电池优化限制。小米设备请设置为‘无限制’。")
+                            .setPositiveButton("去设置", (d, w) -> {
+                                try {
+                                    if (android.os.Build.MANUFACTURER != null && android.os.Build.MANUFACTURER.toLowerCase().contains("xiaomi")) {
+                                        Intent miui = new Intent();
+                                        miui.setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
+                                        miui.putExtra("package_name", getPackageName());
+                                        miui.putExtra("package_label", getApplicationInfo().loadLabel(getPackageManager()).toString());
+                                        startActivity(miui);
+                                    } else {
+                                        Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                        i.setData(Uri.parse("package:" + getPackageName()));
+                                        startActivity(i);
+                                    }
+                                } catch (Exception e1) {
+                                    try {
+                                        Intent i2 = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                                        startActivity(i2);
+                                    } catch (Exception ignored) {}
+                                }
+                            })
+                            .setNegativeButton("暂不", null)
+                            .show();
+                }
+            }
+        } catch (Exception ignored) {}
+        ensureNotificationPermission();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent permIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
             startActivity(permIntent);
@@ -870,11 +996,36 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("touch_device", sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
         intent.putExtra("max_x", sharedPreferences.getInt(KEY_MAX_X, 0));
         intent.putExtra("max_y", sharedPreferences.getInt(KEY_MAX_Y, 0));
-        startService(intent);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+        btnStartRecording.setText("终止录制");
+        sharedPreferences.edit().putBoolean("record_overlay_active", true).apply();
         Toast.makeText(this, "已开启悬浮球，点击开始/结束录制", Toast.LENGTH_SHORT).show();
     }
 
-    private void autoDetectTouchDevice(EditText etTouchDevice, EditText etMaxX, EditText etMaxY) {
+    private void stopRecordingOverlay(boolean cancelSteps) {
+        Intent intent = new Intent(this, RecordService.class);
+        intent.putExtra("stop_overlay", true);
+        intent.putExtra("cancel", cancelSteps);
+        startService(intent);
+        btnStartRecording.setText("录制动作");
+        sharedPreferences.edit().putBoolean("record_overlay_active", false).apply();
+        if (cancelSteps) Toast.makeText(this, "已终止录制，不保存步骤", Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleRecordingOverlay() {
+        boolean active = sharedPreferences.getBoolean("record_overlay_active", false);
+        if (!active) {
+            startRecordingOverlay();
+        } else {
+            stopRecordingOverlay(true);
+        }
+    }
+
+    private void autoDetectTouchDevice(EditText etTouchDevice, EditText etMaxX, EditText etMaxY, TextView tvScreenPx) {
         new Thread(() -> {
             try {
                 Process p = Runtime.getRuntime().exec("su -c getevent -pl");
@@ -911,6 +1062,31 @@ public class MainActivity extends AppCompatActivity {
                             etTouchDevice.setText(path);
                             etMaxX.setText(String.valueOf(mx));
                             etMaxY.setText(String.valueOf(my));
+                            try {
+                                int w = 0, h = 0;
+                                WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+                                if (wm != null) {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                        android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
+                                        w = b.width();
+                                        h = b.height();
+                                    } else {
+                                        DisplayMetrics dm = new DisplayMetrics();
+                                        android.view.Display d = wm.getDefaultDisplay();
+                                        if (d != null) {
+                                            d.getRealMetrics(dm);
+                                            w = dm.widthPixels;
+                                            h = dm.heightPixels;
+                                        }
+                                    }
+                                }
+                                if (w <= 0 || h <= 0) {
+                                    DisplayMetrics dm2 = getResources().getDisplayMetrics();
+                                    w = dm2.widthPixels;
+                                    h = dm2.heightPixels;
+                                }
+                                if (tvScreenPx != null) tvScreenPx.setText(w + " x " + h);
+                            } catch (Throwable ignored) {}
                         });
                         break;
                     }
@@ -992,6 +1168,8 @@ public class MainActivity extends AppCompatActivity {
                         operationAdapter.notifyDataSetChanged();
                         saveCurrentSchemeWithToast();
                         Toast.makeText(MainActivity.this, "录制完成，已填入步骤", Toast.LENGTH_SHORT).show();
+                        sharedPreferences.edit().putBoolean("record_overlay_active", false).apply();
+                        if (btnStartRecording != null) btnStartRecording.setText("录制动作");
                     }
                     boolean showDebug = sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false);
                     if (showDebug && debugLog != null && !debugLog.isEmpty()) {
@@ -1012,6 +1190,32 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         IntentFilter filter = new IntentFilter(ACTION_RECORDING_COMPLETE);
-        registerReceiver(recordingReceiver, filter);
+        ContextCompat.registerReceiver(this, recordingReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
+
+    private void ensureNotificationPermission() {
+        try {
+            NotificationManagerCompat nmc = NotificationManagerCompat.from(this);
+            boolean enabled = nmc.areNotificationsEnabled();
+            if (!enabled) {
+                new AlertDialog.Builder(this)
+                        .setTitle("开启通知以提升稳定性")
+                        .setMessage("请为本应用开启通知，以确保保活通知正常显示并提升录制/执行稳定性。")
+                        .setPositiveButton("去设置", (d, w) -> {
+                            try {
+                                Intent i = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                                i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                                startActivity(i);
+                            } catch (Exception ignored) {}
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+            }
+            if (Build.VERSION.SDK_INT >= 33) {
+                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 }

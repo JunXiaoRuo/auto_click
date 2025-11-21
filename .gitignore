@@ -17,3 +17,7 @@ local.properties
 /app/release
 /app/release
 /.idea
+logcat.txt
+日志.txt
+调试日志.txt
+调试日志.txt

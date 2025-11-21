@@ -193,7 +193,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="最大X:"/>
+            android:text="驱动最大X:"/>
 
         <EditText
             android:id="@+id/et_max_x"
@@ -215,7 +215,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="最大Y:"/>
+            android:text="驱动最大Y:"/>
 
         <EditText
             android:id="@+id/et_max_y"
@@ -227,11 +227,33 @@
             android:inputType="number"/>
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="屏幕尺寸(px):"/>
+
+        <TextView
+            android:id="@+id/tv_screen_px"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="-"/>
+    </LinearLayout>
+
     <Button
         android:id="@+id/btn_auto_detect_device"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="自动解析(getevent -pl)并填入"
         android:layout_marginTop="8dp"/>
+
     </LinearLayout>
 </ScrollView>

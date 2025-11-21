@@ -11,6 +11,19 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.media.AudioFocusRequest;
+import android.media.session.PlaybackState;
+import android.content.pm.ServiceInfo;
+import android.os.Build;
+import android.view.KeyEvent;
+import androidx.core.app.NotificationCompat;
 
 import java.util.ArrayList;
 
@@ -23,9 +36,38 @@ public class RecordService extends Service {
     private int maxX;
     private int maxY;
     private WindowManager.LayoutParams ballParams;
+    private android.widget.TextView ballView;
+    private android.media.session.MediaSession mediaSession;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        boolean keepAliveOnly = intent != null && intent.getBooleanExtra("keep_alive", false);
+        if (keepAliveOnly) {
+            startForegroundWithText("执行中...");
+            return START_STICKY;
+        }
+        boolean stopOverlay = intent != null && intent.getBooleanExtra("stop_overlay", false);
+        if (stopOverlay) {
+            boolean cancel = intent != null && intent.getBooleanExtra("cancel", true);
+            try {
+                if (recorder != null) {
+                    recorder.suppressNextGesture();
+                    recorder.stop();
+                    if (!cancel) {
+                        ArrayList<Operation> ops = recorder.getRecordedOperations();
+                        Intent done = new Intent(MainActivity.ACTION_RECORDING_COMPLETE);
+                        try { done.setPackage(getPackageName()); } catch (Exception ignored) {}
+                        done.putExtra("operations_json", Operation.toJsonArray(ops));
+                        try { done.putExtra("debug_log", recorder.getDebugLog()); } catch (Exception ignored) {}
+                        sendBroadcast(done);
+                    }
+                }
+            } catch (Exception ignored) {}
+            removeFloatingBall();
+            stopForeground(true);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         if (floatView != null) {
             Toast.makeText(this, "悬浮球已开启", Toast.LENGTH_SHORT).show();
             return START_STICKY;
@@ -41,27 +83,27 @@ public class RecordService extends Service {
     private void showFloatingBall() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         floatView = new FrameLayout(this);
-        android.widget.TextView ball = new android.widget.TextView(this);
-        ball.setText("录制");
-        ball.setTextColor(Color.WHITE);
-        ball.setTextSize(14);
+        ballView = new android.widget.TextView(this);
+        ballView.setText("录制");
+        ballView.setTextColor(Color.WHITE);
+        ballView.setTextSize(14);
         int size = dp(56);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size);
         lp.gravity = Gravity.CENTER;
-        ball.setLayoutParams(lp);
+        ballView.setLayoutParams(lp);
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(Color.parseColor("#5500BCD4"));
         bg.setCornerRadius(size/2f);
-        ball.setBackground(bg);
-        ball.setGravity(Gravity.CENTER);
-        floatView.addView(ball);
+        ballView.setBackground(bg);
+        ballView.setGravity(Gravity.CENTER);
+        floatView.addView(ballView);
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 android.graphics.PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
@@ -99,7 +141,7 @@ public class RecordService extends Service {
                         float dy = event.getRawY() - touchY;
                         long dt = System.currentTimeMillis() - downTime;
                         if (Math.abs(dx) < touchSlop && Math.abs(dy) < touchSlop && dt < 500) {
-                            toggleRecording(ball);
+                            toggleRecording(ballView);
                         }
                         return true;
                 }
@@ -107,17 +149,73 @@ public class RecordService extends Service {
             }
         });
         windowManager.addView(floatView, params);
+        floatView.setFocusable(true);
+        floatView.setFocusableInTouchMode(true);
+        floatView.requestFocus();
+        floatView.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && !recording) {
+                    toggleRecording(ballView);
+                    return true;
+                } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && recording) {
+                    toggleRecording(ballView);
+                    return true;
+                }
+            }
+            return false;
+        });
         updateExcludeRect(params, floatView);
         Toast.makeText(this, "点击悬浮球开始/结束录制", Toast.LENGTH_SHORT).show();
+
+        try {
+            mediaSession = new android.media.session.MediaSession(this, "record_session");
+            android.media.VolumeProvider vp = new android.media.VolumeProvider(android.media.VolumeProvider.VOLUME_CONTROL_RELATIVE, 100, 50) {
+                @Override
+                public void onAdjustVolume(int direction) {
+                    if (direction > 0 && !recording) {
+                        toggleRecording(ballView);
+                    } else if (direction < 0 && recording) {
+                        toggleRecording(ballView);
+                    }
+                }
+            };
+            mediaSession.setFlags(android.media.session.MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | android.media.session.MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            PlaybackState state = new PlaybackState.Builder()
+                    .setState(PlaybackState.STATE_PLAYING, 0, 1f)
+                    .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
+                    .build();
+            mediaSession.setPlaybackState(state);
+            mediaSession.setPlaybackToRemote(vp);
+            mediaSession.setActive(true);
+
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
+            AudioFocusRequest afr = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                afr = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                        .setAudioAttributes(attrs)
+                        .setOnAudioFocusChangeListener(focusChange -> {})
+                        .build();
+            }
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            if (am != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    am.requestAudioFocus(afr);
+                }
+            }
+        } catch (Exception ignored) {}
+
+        startForegroundWithText("录制中(音量加开始/音量减结束)");
     }
 
     private void updateExcludeRect(WindowManager.LayoutParams params, View v) {
+        if (v == null || recorder == null) return;
         v.post(() -> {
             int w = v.getWidth();
             int h = v.getHeight();
-            if (recorder != null) {
-                recorder.setExcludeRect(params.x, params.y, Math.max(w, 120), Math.max(h, 120));
-            }
+            recorder.setExcludeRect(params.x, params.y, Math.max(w, 120), Math.max(h, 120));
         });
     }
 
@@ -131,6 +229,7 @@ public class RecordService extends Service {
             if (ballParams != null) updateExcludeRect(ballParams, floatView);
             recording = true;
             Toast.makeText(this, "开始录制屏幕操作", Toast.LENGTH_SHORT).show();
+            startForegroundWithText("录制中...");
         } else {
             android.graphics.drawable.GradientDrawable bg = (android.graphics.drawable.GradientDrawable) ball.getBackground();
             bg.setColor(Color.parseColor("#5500BCD4"));
@@ -141,11 +240,13 @@ public class RecordService extends Service {
                 recorder.stop();
                 ArrayList<Operation> ops = recorder.getRecordedOperations();
                 Intent done = new Intent(MainActivity.ACTION_RECORDING_COMPLETE);
+                try { done.setPackage(getPackageName()); } catch (Exception ignored) {}
                 done.putExtra("operations_json", Operation.toJsonArray(ops));
                 try { done.putExtra("debug_log", recorder.getDebugLog()); } catch (Exception ignored) {}
                 sendBroadcast(done);
             }
             removeFloatingBall();
+            stopForeground(true);
             stopSelf();
         }
     }
@@ -160,7 +261,41 @@ public class RecordService extends Service {
     @Override
     public void onDestroy() {
         removeFloatingBall();
+        try {
+            if (mediaSession != null) {
+                mediaSession.setActive(false);
+                mediaSession.release();
+            }
+        } catch (Exception ignored) {}
+        stopForeground(true);
         super.onDestroy();
+    }
+
+    private void startForegroundWithText(String text) {
+        try {
+            String channelId = "record_channel";
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel ch = new NotificationChannel(channelId, "录制服务", NotificationManager.IMPORTANCE_HIGH);
+                if (nm != null) nm.createNotificationChannel(ch);
+            }
+            PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+            NotificationCompat.Builder b = new NotificationCompat.Builder(this, channelId)
+                    .setContentTitle("自动点击")
+                    .setContentText(text)
+                    .setSmallIcon(android.R.drawable.ic_media_play)
+                    .setContentIntent(pi)
+                    .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+            b.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(1, b.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(1, b.build());
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override
