@@ -26,6 +26,10 @@ public class RecordService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (floatView != null) {
+            Toast.makeText(this, "悬浮球已开启", Toast.LENGTH_SHORT).show();
+            return START_STICKY;
+        }
         touchDevice = intent != null ? intent.getStringExtra("touch_device") : null;
         maxX = intent != null ? intent.getIntExtra("max_x", 0) : 0;
         maxY = intent != null ? intent.getIntExtra("max_y", 0) : 0;
