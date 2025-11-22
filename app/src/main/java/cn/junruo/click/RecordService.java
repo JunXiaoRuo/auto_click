@@ -38,12 +38,20 @@ public class RecordService extends Service {
     private WindowManager.LayoutParams ballParams;
     private android.widget.TextView ballView;
     private android.media.session.MediaSession mediaSession;
+    private boolean keepAliveActive = false;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         boolean keepAliveOnly = intent != null && intent.getBooleanExtra("keep_alive", false);
         if (keepAliveOnly) {
-            startForegroundWithText("执行中...");
+            keepAliveActive = true;
+            startForegroundWithText("服务保活中...");
+            return START_STICKY;
+        }
+        boolean stopKeepAlive = intent != null && intent.getBooleanExtra("stop_keep_alive", false);
+        if (stopKeepAlive) {
+            keepAliveActive = false;
+            try { stopForeground(true); } catch (Exception ignored) {}
             return START_STICKY;
         }
         boolean stopOverlay = intent != null && intent.getBooleanExtra("stop_overlay", false);
@@ -64,8 +72,10 @@ public class RecordService extends Service {
                 }
             } catch (Exception ignored) {}
             removeFloatingBall();
-            stopForeground(true);
-            stopSelf();
+            if (!keepAliveActive) {
+                try { stopForeground(true); } catch (Exception ignored) {}
+                stopSelf();
+            }
             return START_NOT_STICKY;
         }
         if (floatView != null) {
@@ -207,7 +217,7 @@ public class RecordService extends Service {
             }
         } catch (Exception ignored) {}
 
-        startForegroundWithText("录制中(音量加开始/音量减结束)");
+        // no foreground for overlay
     }
 
     private void updateExcludeRect(WindowManager.LayoutParams params, View v) {
@@ -229,7 +239,6 @@ public class RecordService extends Service {
             if (ballParams != null) updateExcludeRect(ballParams, floatView);
             recording = true;
             Toast.makeText(this, "开始录制屏幕操作", Toast.LENGTH_SHORT).show();
-            startForegroundWithText("录制中...");
         } else {
             android.graphics.drawable.GradientDrawable bg = (android.graphics.drawable.GradientDrawable) ball.getBackground();
             bg.setColor(Color.parseColor("#5500BCD4"));
@@ -246,8 +255,10 @@ public class RecordService extends Service {
                 sendBroadcast(done);
             }
             removeFloatingBall();
-            stopForeground(true);
-            stopSelf();
+            if (!keepAliveActive) {
+                try { stopForeground(true); } catch (Exception ignored) {}
+                stopSelf();
+            }
         }
     }
 
@@ -267,7 +278,9 @@ public class RecordService extends Service {
                 mediaSession.release();
             }
         } catch (Exception ignored) {}
-        stopForeground(true);
+        if (!keepAliveActive) {
+            try { stopForeground(true); } catch (Exception ignored) {}
+        }
         super.onDestroy();
     }
 

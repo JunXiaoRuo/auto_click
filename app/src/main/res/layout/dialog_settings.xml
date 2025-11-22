@@ -15,6 +15,25 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
+        <CheckBox
+            android:id="@+id/cb_keep_alive"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="服务保活(常驻通知)"/>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="常规设置"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
         <TextView
             android:layout_width="wrap_content"
@@ -53,49 +72,8 @@
             android:hint="300-2000"/>
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="点击/长按允许偏移(px):"/>
 
-        <EditText
-            android:id="@+id/et_move_tolerance_px"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="例如20"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="滑动采样阈值(次):"/>
-
-        <EditText
-            android:id="@+id/et_motion_threshold"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="例如2"/>
-    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -112,19 +90,7 @@
             android:text="无坐标长按回退(用上次坐标)"/>
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-
-        <CheckBox
-            android:id="@+id/cb_show_debug"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="显示录制调试信息"/>
-    </LinearLayout>
+    
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -157,9 +123,37 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="高级设置"
+        android:text="录制设置"
         android:textStyle="bold"
         android:layout_marginTop="12dp"/>
+
+    <Button
+        android:id="@+id/btn_auto_detect_device"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="自动解析(getevent -pl)并填入"
+        android:layout_marginTop="8dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="屏幕尺寸(px):"/>
+
+        <TextView
+            android:id="@+id/tv_screen_px"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="-"/>
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -227,6 +221,74 @@
             android:inputType="number"/>
     </LinearLayout>
 
+    
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="点击/长按允许偏移(px):"/>
+
+        <EditText
+            android:id="@+id/et_move_tolerance_px"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:inputType="number"
+            android:hint="例如20"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="滑动采样阈值(次):"/>
+
+        <EditText
+            android:id="@+id/et_motion_threshold"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:inputType="number"
+            android:hint="例如2"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="录制后首动作延时(ms):"/>
+
+        <EditText
+            android:id="@+id/et_first_action_delay"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:inputType="number"
+            android:hint="例如2000"/>
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -234,26 +296,14 @@
         android:gravity="center_vertical"
         android:layout_marginTop="8dp">
 
-        <TextView
+        <CheckBox
+            android:id="@+id/cb_show_debug"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="屏幕尺寸(px):"/>
-
-        <TextView
-            android:id="@+id/tv_screen_px"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="-"/>
+            android:text="显示录制调试信息"/>
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btn_auto_detect_device"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="自动解析(getevent -pl)并填入"
-        android:layout_marginTop="8dp"/>
+    
 
     </LinearLayout>
 </ScrollView>

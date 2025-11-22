@@ -70,6 +70,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_MOVE_TOLERANCE_PX = "move_tolerance_px";
     private static final String KEY_MOTION_THRESHOLD = "motion_threshold";
     private static final String KEY_SHOW_DEBUG = "show_debug";
+    private static final String KEY_FIRST_ACTION_DELAY = "first_action_delay";
+    private static final String KEY_KEEP_ALIVE = "keep_alive";
     public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
 
     // UI 组件
@@ -129,6 +131,17 @@ public class MainActivity extends AppCompatActivity {
         setupAutoClickSwitchListener();// 设置自动点击开关事件
 
         registerRecordingReceiver();
+
+        try {
+            if (sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false)) {
+                Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(svc);
+                } else {
+                    startService(svc);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private void initViews() {
@@ -598,17 +611,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        ensureNotificationPermission();
         new Thread(() -> {
             try {
-                try {
-                    Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(svc);
-                    } else {
-                        startService(svc);
-                    }
-                } catch (Exception ignored) {}
                 int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
                 int longPressDuration = sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION);
                 int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
@@ -647,7 +651,6 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() ->
                         Toast.makeText(this, "错误: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
-            try { stopService(new Intent(this, RecordService.class)); } catch (Exception ignored) {}
         }).start();
     }
 
@@ -845,8 +848,10 @@ public class MainActivity extends AppCompatActivity {
         EditText etLongPressDuration = dialogView.findViewById(R.id.et_long_press_duration);
         EditText etMoveTolerancePx = dialogView.findViewById(R.id.et_move_tolerance_px);
         EditText etMotionThreshold = dialogView.findViewById(R.id.et_motion_threshold);
+        EditText etFirstActionDelay = dialogView.findViewById(R.id.et_first_action_delay);
         android.widget.CheckBox cbFallbackNoXY = dialogView.findViewById(R.id.cb_fallback_no_xy);
         android.widget.CheckBox cbShowDebug = dialogView.findViewById(R.id.cb_show_debug);
+        android.widget.CheckBox cbKeepAlive = dialogView.findViewById(R.id.cb_keep_alive);
         EditText etTouchDevice = dialogView.findViewById(R.id.et_touch_device);
         EditText etMaxX = dialogView.findViewById(R.id.et_max_x);
         EditText etMaxY = dialogView.findViewById(R.id.et_max_y);
@@ -863,8 +868,29 @@ public class MainActivity extends AppCompatActivity {
                 sharedPreferences.getInt(KEY_MOVE_TOLERANCE_PX, 20)));
         etMotionThreshold.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_MOTION_THRESHOLD, 9999)));
+        etFirstActionDelay.setText(String.valueOf(
+                sharedPreferences.getInt(KEY_FIRST_ACTION_DELAY, 2000)));
         cbFallbackNoXY.setChecked(sharedPreferences.getBoolean(KEY_FALLBACK_NO_XY, true));
         cbShowDebug.setChecked(sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false));
+        cbKeepAlive.setChecked(sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false));
+
+        cbKeepAlive.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, isChecked).apply();
+            try {
+                if (isChecked) {
+                    ensureNotificationPermission();
+                    Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(svc);
+                    } else {
+                        startService(svc);
+                    }
+                } else {
+                    Intent stop = new Intent(this, RecordService.class).putExtra("stop_keep_alive", true);
+                    startService(stop);
+                }
+            } catch (Exception ignored) {}
+        });
 
         etTouchDevice.setText(sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
         etMaxX.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_X, 0)));
@@ -902,7 +928,7 @@ public class MainActivity extends AppCompatActivity {
 
         new AlertDialog.Builder(this)
                 .setView(dialogView)
-                .setTitle("高级设置")
+                .setTitle("设置")
                 .setPositiveButton("保存", (dialog, which) -> {
                     try {
                         int clickDuration = Integer.parseInt(etClickDuration.getText().toString());
@@ -910,6 +936,7 @@ public class MainActivity extends AppCompatActivity {
                         int swipeDuration = Integer.parseInt(etSwipeDuration.getText().toString());
                         int moveTolerancePx = parseIntSafe(etMoveTolerancePx.getText().toString());
                         int motionThreshold = parseIntSafe(etMotionThreshold.getText().toString());
+                        int firstActionDelay = parseIntSafe(etFirstActionDelay.getText().toString());
                         boolean showDebug = cbShowDebug.isChecked();
                         String touchDevice = etTouchDevice.getText().toString().trim();
                         int maxX = parseIntSafe(etMaxX.getText().toString());
@@ -921,8 +948,10 @@ public class MainActivity extends AppCompatActivity {
                                 .putInt(KEY_SWIPE_DURATION, swipeDuration)
                                 .putInt(KEY_MOVE_TOLERANCE_PX, moveTolerancePx)
                                 .putInt(KEY_MOTION_THRESHOLD, motionThreshold)
+                                .putInt(KEY_FIRST_ACTION_DELAY, firstActionDelay)
                                 .putBoolean(KEY_FALLBACK_NO_XY, cbFallbackNoXY.isChecked())
                                 .putBoolean(KEY_SHOW_DEBUG, showDebug)
+                                .putBoolean(KEY_KEEP_ALIVE, cbKeepAlive.isChecked())
                                 .putString(KEY_TOUCH_DEVICE, touchDevice)
                                 .putInt(KEY_MAX_X, maxX)
                                 .putInt(KEY_MAX_Y, maxY)
@@ -946,7 +975,7 @@ public class MainActivity extends AppCompatActivity {
         if (TextUtils.isEmpty(tdCheck)) {
             new AlertDialog.Builder(this)
                     .setTitle("需要配置触摸设备")
-                    .setMessage("请前往高级设置，填入触摸设备路径（可使用自动解析）。")
+                    .setMessage("请前往设置，填入触摸设备路径（可使用自动解析）。")
                     .setPositiveButton("去设置", (d, w) -> showSettingsDialog())
                     .setNegativeButton("取消", null)
                     .show();
@@ -985,7 +1014,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } catch (Exception ignored) {}
-        ensureNotificationPermission();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent permIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
             startActivity(permIntent);
@@ -996,11 +1024,7 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("touch_device", sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
         intent.putExtra("max_x", sharedPreferences.getInt(KEY_MAX_X, 0));
         intent.putExtra("max_y", sharedPreferences.getInt(KEY_MAX_Y, 0));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
+        startService(intent);
         btnStartRecording.setText("终止录制");
         sharedPreferences.edit().putBoolean("record_overlay_active", true).apply();
         Toast.makeText(this, "已开启悬浮球，点击开始/结束录制", Toast.LENGTH_SHORT).show();
@@ -1163,6 +1187,10 @@ public class MainActivity extends AppCompatActivity {
                     String debugLog = intent.getStringExtra("debug_log");
                     if (json != null) {
                         ArrayList<Operation> ops = Operation.fromJsonArray(json);
+                        try {
+                            int firstDelay = sharedPreferences.getInt(KEY_FIRST_ACTION_DELAY, 2000);
+                            if (!ops.isEmpty()) ops.get(0).delay = firstDelay;
+                        } catch (Exception ignored) {}
                         operations.clear();
                         operations.addAll(ops);
                         operationAdapter.notifyDataSetChanged();
