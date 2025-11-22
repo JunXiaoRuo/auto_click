@@ -99,6 +99,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean hasRootPermission = false;// 是否拥有ROOT权限
     private List<String> selectedAppsToStop = new ArrayList<>();
     private BroadcastReceiver recordingReceiver;
+    private boolean pendingStartKeepAlive = false;
+    private static final String TAG = "MainActivity";
 
     // 修改onCreate方法中的初始化顺序
     @Override
@@ -132,16 +134,16 @@ public class MainActivity extends AppCompatActivity {
 
         registerRecordingReceiver();
 
-        try {
-            if (sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false)) {
-                Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(svc);
-                } else {
-                    startService(svc);
-                }
+        if (sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false)) {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                pendingStartKeepAlive = true;
+                ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
+                android.util.Log.i(TAG, "Auto-start keep-alive requires POST_NOTIFICATIONS; requesting");
+            } else {
+                startKeepAliveServiceSafely();
             }
-        } catch (Exception ignored) {}
+        }
     }
 
     private void initViews() {
@@ -876,20 +878,23 @@ public class MainActivity extends AppCompatActivity {
 
         cbKeepAlive.setOnCheckedChangeListener((buttonView, isChecked) -> {
             sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, isChecked).apply();
-            try {
-                if (isChecked) {
-                    ensureNotificationPermission();
-                    Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(svc);
-                    } else {
-                        startService(svc);
-                    }
-                } else {
+            if (isChecked) {
+                ensureNotificationPermission();
+            if (Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                pendingStartKeepAlive = true;
+                ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
+                android.util.Log.i(TAG, "Requesting POST_NOTIFICATIONS permission for keep-alive");
+                Toast.makeText(this, "需要通知权限以启用保活", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            startKeepAliveServiceSafely();
+            } else {
+                try {
                     Intent stop = new Intent(this, RecordService.class).putExtra("stop_keep_alive", true);
                     startService(stop);
-                }
-            } catch (Exception ignored) {}
+                } catch (Exception ignored) {}
+            }
         });
 
         etTouchDevice.setText(sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
@@ -1245,5 +1250,34 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } catch (Exception ignored) {}
+    }
+
+    private void startKeepAliveServiceSafely() {
+        try {
+            android.util.Log.i(TAG, "Starting keep-alive foreground service");
+            Intent svc = new Intent(this, RecordService.class).putExtra("keep_alive", true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
+            }
+            Toast.makeText(this, "已开启保活通知", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "Failed to start keep-alive", e);
+            Toast.makeText(this, "无法启动保活，请检查通知权限", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            boolean granted = grantResults != null && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted && pendingStartKeepAlive) {
+                pendingStartKeepAlive = false;
+                android.util.Log.i(TAG, "POST_NOTIFICATIONS granted; starting keep-alive");
+                startKeepAliveServiceSafely();
+            }
+        }
     }
 }

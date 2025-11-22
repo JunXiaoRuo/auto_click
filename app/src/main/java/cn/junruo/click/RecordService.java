@@ -24,10 +24,12 @@ import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.view.KeyEvent;
 import androidx.core.app.NotificationCompat;
+import android.util.Log;
 
 import java.util.ArrayList;
 
 public class RecordService extends Service {
+    private static final String TAG = "RecordService";
     private WindowManager windowManager;
     private FrameLayout floatView;
     private boolean recording = false;
@@ -42,16 +44,19 @@ public class RecordService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.i(TAG, "onStartCommand flags=" + flags + ", keepAlive=" + (intent!=null && intent.getBooleanExtra("keep_alive", false)) + ", stopKeepAlive=" + (intent!=null && intent.getBooleanExtra("stop_keep_alive", false)) + ", stopOverlay=" + (intent!=null && intent.getBooleanExtra("stop_overlay", false)));
         boolean keepAliveOnly = intent != null && intent.getBooleanExtra("keep_alive", false);
         if (keepAliveOnly) {
             keepAliveActive = true;
             startForegroundWithText("服务保活中...");
+            Log.i(TAG, "Started foreground keep-alive");
             return START_STICKY;
         }
         boolean stopKeepAlive = intent != null && intent.getBooleanExtra("stop_keep_alive", false);
         if (stopKeepAlive) {
             keepAliveActive = false;
             try { stopForeground(true); } catch (Exception ignored) {}
+            Log.i(TAG, "Stopped keep-alive foreground");
             return START_STICKY;
         }
         boolean stopOverlay = intent != null && intent.getBooleanExtra("stop_overlay", false);
@@ -292,11 +297,11 @@ public class RecordService extends Service {
                 NotificationChannel ch = new NotificationChannel(channelId, "录制服务", NotificationManager.IMPORTANCE_HIGH);
                 if (nm != null) nm.createNotificationChannel(ch);
             }
-            PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+            PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             NotificationCompat.Builder b = new NotificationCompat.Builder(this, channelId)
                     .setContentTitle("自动点击")
                     .setContentText(text)
-                    .setSmallIcon(android.R.drawable.ic_media_play)
+                    .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentIntent(pi)
                     .setOngoing(true)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -308,7 +313,8 @@ public class RecordService extends Service {
             } else {
                 startForeground(1, b.build());
             }
-        } catch (Exception ignored) {}
+            Log.i(TAG, "startForeground posted notification on channel '" + channelId + "'");
+        } catch (Exception e) { Log.e(TAG, "startForegroundWithText failed", e); }
     }
 
     @Override
