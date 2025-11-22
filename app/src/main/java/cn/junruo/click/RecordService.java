@@ -475,15 +475,15 @@ public class RecordService extends Service {
 
     private void startForegroundWithText(String text) {
         try {
-            String channelId = "record_channel";
+            String channelId = "keep_alive_channel";
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel ch = new NotificationChannel(channelId, "录制服务", NotificationManager.IMPORTANCE_HIGH);
+                NotificationChannel ch = new NotificationChannel(channelId, "保活服务", NotificationManager.IMPORTANCE_HIGH);
                 if (nm != null) nm.createNotificationChannel(ch);
             }
             PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             NotificationCompat.Builder b = new NotificationCompat.Builder(this, channelId)
-                    .setContentTitle("自动点击")
+                    .setContentTitle("保活服务")
                     .setContentText(text)
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentIntent(pi)
@@ -492,10 +492,12 @@ public class RecordService extends Service {
                     .setCategory(NotificationCompat.CATEGORY_SERVICE)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
             b.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+            Notification n = b.build();
+            n.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(1, b.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+                startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
             } else {
-                startForeground(1, b.build());
+                startForeground(1, n);
             }
             Log.i(TAG, "startForeground posted notification on channel '" + channelId + "'");
         } catch (Exception e) { Log.e(TAG, "startForegroundWithText failed", e); }

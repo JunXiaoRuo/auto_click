@@ -1718,7 +1718,7 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 startService(svc);
             }
-            Toast.makeText(this, "已开启保活通知", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this, "已开启保活通知", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             android.util.Log.e(TAG, "Failed to start keep-alive", e);
             Toast.makeText(this, "无法启动保活，请检查通知权限", Toast.LENGTH_SHORT).show();
