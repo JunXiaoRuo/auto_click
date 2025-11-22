@@ -157,7 +157,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint="选择目标应用"
+                android:hint="未选择则不跳转"
                 android:inputType="none"
                 android:focusable="false"
                 android:focusableInTouchMode="false"
@@ -168,6 +168,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="选择"/>
+
+            <Button
+                android:id="@+id/btn_clear_app"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="清除"/>
         </LinearLayout>
 
         <!-- 操作按钮区域 -->

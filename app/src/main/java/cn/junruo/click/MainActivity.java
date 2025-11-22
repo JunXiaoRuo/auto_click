@@ -80,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText etAppActivity;// 显示/输入目标应用名
     private Switch swAutoClick;// 是否启用自动执行
     private Button btnSelectApp;
+    private Button btnClearApp;
     private Button btnAddOperation;
     private ListView lvOperations;// 操作步骤列表
     private Button btnSettings;
@@ -161,6 +162,7 @@ public class MainActivity extends AppCompatActivity {
         etAppActivity = findViewById(R.id.et_app_activity);
         swAutoClick = findViewById(R.id.sw_auto_click);
         btnSelectApp = findViewById(R.id.btn_select_app);
+        btnClearApp = findViewById(R.id.btn_clear_app);
         btnAddOperation = findViewById(R.id.btn_add_operation);
         btnStartRecording = findViewById(R.id.btn_start_recording);
         lvOperations = findViewById(R.id.lv_operations);
@@ -191,6 +193,52 @@ public class MainActivity extends AppCompatActivity {
             btnPermissions.setOnClickListener(v -> showPermissionsDialog());
         }
 
+        btnSelectApp.setOnClickListener(v -> selectApp());// 选择目标App
+        if (btnClearApp != null) {
+            btnClearApp.setOnClickListener(v -> {
+                String[] options = new String[]{"清除目标应用", "清除步骤", "全部清除"};
+                new AlertDialog.Builder(this)
+                        .setTitle("选择清除内容")
+                        .setItems(options, (d, which) -> {
+                            if (currentScheme == null) {
+                                Scheme def = findSchemeByName("默认方案");
+                                if (def == null) {
+                                    def = new Scheme("默认方案");
+                                    schemes.add(def);
+                                }
+                                currentScheme = def;
+                                updateSchemeSpinner();
+                            }
+                            boolean clearApp = which == 0 || which == 2;
+                            boolean clearOps = which == 1 || which == 2;
+                            if (clearApp) {
+                                currentScheme.appName = "";
+                                currentScheme.appActivity = "";
+                                sharedPreferences.edit()
+                                        .putString(KEY_APP_ACTIVITY, "")
+                                        .putString(KEY_APP_NAME, "")
+                                        .apply();
+                                etAppActivity.setText("未选择则不跳转");
+                            }
+                            if (clearOps) {
+                                operations.clear();
+                                operationAdapter.notifyDataSetChanged();
+                                sharedPreferences.edit()
+                                        .putString(KEY_OPERATIONS, Operation.toJsonArray(operations))
+                                        .apply();
+                                if (swAutoClick != null && swAutoClick.isChecked()) {
+                                    swAutoClick.setChecked(false);
+                                }
+                            }
+                            saveCurrentScheme();
+                            String tip = which == 0 ? "已清除目标应用并保存" : which == 1 ? "已清除步骤并保存" : "已清除目标应用与步骤并保存";
+                            Toast.makeText(this, tip, Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+            });
+        }
+
         tvRootStatus.setOnClickListener(v -> {
             if (!hasRootPermission) {
                 requestRootPermission();
@@ -198,7 +246,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         // 设置点击事件
-        btnSelectApp.setOnClickListener(v -> selectApp());// 选择目标App
         btnAddOperation.setOnClickListener(v -> showOperationDialog(null));// 添加操作
         btnStartRecording.setOnClickListener(v -> toggleRecordingOverlay());
 
@@ -292,7 +339,7 @@ public class MainActivity extends AppCompatActivity {
                         swAutoClick.setOnCheckedChangeListener(null);
                         swAutoClick.setChecked(false);
                         swAutoClick.setOnCheckedChangeListener(this);
-                        Toast.makeText(MainActivity.this, "请先配置应用和操作步骤", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
                     }
                 }
             }
@@ -310,7 +357,7 @@ public class MainActivity extends AppCompatActivity {
             // 配置无效时关闭自动执行
             sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
             swAutoClick.setChecked(false);
-            Toast.makeText(this, "自动执行已关闭：配置无效", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "自动执行已关闭：请先添加操作步骤", Toast.LENGTH_SHORT).show();
         }
     }
     // 修改方案选择监听器
@@ -408,7 +455,7 @@ public class MainActivity extends AppCompatActivity {
         if (currentScheme == null) return;
 
         // 更新UI显示当前方案的配置
-        etAppActivity.setText(currentScheme.appName);
+        etAppActivity.setText(TextUtils.isEmpty(currentScheme.appName) ? "未选择则不跳转" : currentScheme.appName);
         operations.clear();
         operations.addAll(currentScheme.operations);
         operationAdapter.notifyDataSetChanged();
@@ -441,7 +488,8 @@ public class MainActivity extends AppCompatActivity {
         if (currentScheme == null) return;
 
         // 从UI获取最新配置
-        currentScheme.appName = etAppActivity.getText().toString();
+        String displayName = etAppActivity.getText().toString();
+        currentScheme.appName = "未选择则不跳转".equals(displayName) ? "" : displayName;
         currentScheme.appActivity = sharedPreferences.getString(KEY_APP_ACTIVITY, "");
         currentScheme.operations = new ArrayList<>(operations);
         currentScheme.stopAppsEnabled = swStopAppsEnabled != null && swStopAppsEnabled.isChecked();
@@ -557,20 +605,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isConfigValid() {
-        String appAct = currentScheme != null ? currentScheme.appActivity : "";
-        if (TextUtils.isEmpty(appAct)) {
-            appAct = sharedPreferences.getString(KEY_APP_ACTIVITY, "");
-        }
         boolean hasOps = currentScheme != null ? !currentScheme.operations.isEmpty() : !operations.isEmpty();
-        boolean hasValidConfig = !TextUtils.isEmpty(appAct) && hasOps;
-        if (!hasValidConfig) {
-            if (TextUtils.isEmpty(appAct)) {
-                Toast.makeText(this, "请先选择目标应用", Toast.LENGTH_SHORT).show();
-            } else if (!hasOps) {
-                Toast.makeText(this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
-            }
+        if (!hasOps) {
+            Toast.makeText(this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
+            return false;
         }
-        return hasValidConfig;
+        return true;
     }
 
     private void showAutoStartCountdown() {
@@ -631,8 +671,10 @@ public class MainActivity extends AppCompatActivity {
                 int longPressDuration = sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION);
                 int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
 
-                // 启动目标Activity
-                Runtime.getRuntime().exec("su -c am start -n " + currentScheme.appActivity);
+                // 启动目标Activity（可选）
+                if (!TextUtils.isEmpty(currentScheme.appActivity)) {
+                    Runtime.getRuntime().exec("su -c am start -n " + currentScheme.appActivity);
+                }
 
                 for (Operation op : currentScheme.operations) {
                     Thread.sleep(op.delay);
