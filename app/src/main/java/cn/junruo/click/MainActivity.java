@@ -79,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
     // UI 组件
     private EditText etAppActivity;// 显示/输入目标应用名
     private Switch swAutoClick;// 是否启用自动执行
+    private Button btnExecute;
     private Button btnSelectApp;
     private Button btnClearApp;
     private Button btnAddOperation;
@@ -105,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean pendingStartKeepAlive = false;
     private static final String TAG = "MainActivity";
     private AlertDialog permissionsDialog;
+    private boolean execOverlayActive = false;
 
     // 修改onCreate方法中的初始化顺序
     @Override
@@ -120,6 +122,7 @@ public class MainActivity extends AppCompatActivity {
 
         // 初始化SharedPreferences
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        try { sharedPreferences.edit().putBoolean("exec_overlay_active", false).apply(); } catch (Exception ignored) {}
 
         // 初始化UI、权限与数据
         initViews();// 初始化控件与事件
@@ -135,7 +138,7 @@ public class MainActivity extends AppCompatActivity {
         setupSchemeSelector();// 设置方案选择器事件
 
 
-        setupAutoClickSwitchListener();// 设置自动点击开关事件
+        
 
         registerRecordingReceiver();
 
@@ -155,12 +158,17 @@ public class MainActivity extends AppCompatActivity {
             showPermissionsDialog();
             sharedPreferences.edit().putBoolean(KEY_PERMISSIONS_DIALOG_SHOWN, true).apply();
         }
+
+        boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
+        if (autoClickEnabled) {
+            showAutoStartCountdown();
+        }
     }
 
     private void initViews() {
         // 基本视图初始化
         etAppActivity = findViewById(R.id.et_app_activity);
-        swAutoClick = findViewById(R.id.sw_auto_click);
+        btnExecute = findViewById(R.id.btn_execute);
         btnSelectApp = findViewById(R.id.btn_select_app);
         btnClearApp = findViewById(R.id.btn_clear_app);
         btnAddOperation = findViewById(R.id.btn_add_operation);
@@ -189,6 +197,9 @@ public class MainActivity extends AppCompatActivity {
 
         // 设置按钮点击监听器
         btnSettings.setOnClickListener(v -> showSettingsDialog());
+        if (btnExecute != null) {
+            btnExecute.setOnClickListener(v -> showExecuteDialog());
+        }
         if (btnPermissions != null) {
             btnPermissions.setOnClickListener(v -> showPermissionsDialog());
         }
@@ -360,7 +371,7 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "自动执行已关闭：请先添加操作步骤", Toast.LENGTH_SHORT).show();
         }
     }
-    // 修改方案选择监听器
+        // 修改方案选择监听器
     private void setupSchemeSelector() {
         spSchemeSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -372,9 +383,7 @@ public class MainActivity extends AppCompatActivity {
                 currentScheme = schemes.get(position);
                 loadCurrentScheme();
 
-                // 更新自动执行开关状态
-                boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
-                swAutoClick.setChecked(autoClickEnabled);
+                
             }
 
             @Override
@@ -614,7 +623,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAutoStartCountdown() {
-        if (swAutoClick == null || !swAutoClick.isChecked()) return;
+        if (!sharedPreferences.getBoolean(KEY_AUTO_CLICK, false)) return;
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_countdown, null);
@@ -645,9 +654,6 @@ public class MainActivity extends AppCompatActivity {
 
         btnStop.setOnClickListener(v -> {
             countdownHandler.removeCallbacks(countdownRunnable);
-            if (swAutoClick != null) {
-                swAutoClick.setChecked(false);
-            }
             sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
             dialog.dismiss();
         });
@@ -661,7 +667,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void performOperations() {
-        if (swAutoClick == null || !swAutoClick.isChecked() || !hasRootPermission() || currentScheme == null) {
+        if (!sharedPreferences.getBoolean(KEY_AUTO_CLICK, false) || !hasRootPermission() || currentScheme == null) {
             return;
         }
 
@@ -708,6 +714,146 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(this, "错误: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private void showExecuteDialog() {
+        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setPadding(dp(16), dp(12), dp(16), dp(12));
+
+        android.widget.LinearLayout row1 = new android.widget.LinearLayout(this);
+        row1.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        android.widget.TextView tv1 = new android.widget.TextView(this);
+        tv1.setText("自动执行开关（软件启动则自动执行）");
+        tv1.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.Switch sw1 = new android.widget.Switch(this);
+        sw1.setChecked(sharedPreferences.getBoolean(KEY_AUTO_CLICK, false));
+        row1.addView(tv1);
+        row1.addView(sw1);
+        root.addView(row1);
+
+        android.widget.LinearLayout row2 = new android.widget.LinearLayout(this);
+        row2.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        android.widget.TextView tv2 = new android.widget.TextView(this);
+        tv2.setText("悬浮球执行");
+        tv2.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.Switch sw2 = new android.widget.Switch(this);
+        boolean overlayActive = execOverlayActive;
+        sw2.setChecked(overlayActive);
+        row2.addView(tv2);
+        row2.addView(sw2);
+        root.addView(row2);
+
+        AlertDialog dlg = new AlertDialog.Builder(this)
+                .setTitle("执行")
+                .setView(root)
+                .setNegativeButton("关闭", null)
+                .create();
+
+        sw1.setOnCheckedChangeListener((b, ck) -> {
+            sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, ck).apply();
+            if (ck) {
+                if (isConfigValid()) {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                            boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+                            if (!ignoring) {
+                                new AlertDialog.Builder(MainActivity.this)
+                                        .setTitle("建议关闭电池优化")
+                                        .setMessage("为保证跨应用执行流程稳定，请将本应用设为不受电池优化限制。小米设备请设置为‘无限制’。")
+                                        .setPositiveButton("去设置", (d, w) -> {
+                                            try {
+                                                if (android.os.Build.MANUFACTURER != null && android.os.Build.MANUFACTURER.toLowerCase().contains("xiaomi")) {
+                                                    Intent miui = new Intent();
+                                                    miui.setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
+                                                    miui.putExtra("package_name", getPackageName());
+                                                    miui.putExtra("package_label", getApplicationInfo().loadLabel(getPackageManager()).toString());
+                                                    startActivity(miui);
+                                                } else {
+                                                    Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                                    i.setData(Uri.parse("package:" + getPackageName()));
+                                                    startActivity(i);
+                                                }
+                                            } catch (Exception e1) {
+                                                try {
+                                                    Intent i2 = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                                                    startActivity(i2);
+                                                } catch (Exception ignored) {}
+                                            }
+                                        })
+                                        .setNegativeButton("暂不", null)
+                                        .show();
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                    showAutoStartCountdown();
+                } else {
+                    sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
+                    Toast.makeText(MainActivity.this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        CompoundButton.OnCheckedChangeListener execOverlayListener = new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    if (sharedPreferences.getBoolean("record_overlay_active", false)) {
+                        Toast.makeText(MainActivity.this, "录制悬浮球已开启，请先终止录制后再开启执行悬浮球", Toast.LENGTH_SHORT).show();
+                        sw2.setOnCheckedChangeListener(null);
+                        sw2.setChecked(false);
+                        sw2.setOnCheckedChangeListener(this);
+                        return;
+                    }
+                    startExecOverlay();
+                } else {
+                    stopExecOverlay();
+                }
+            }
+        };
+        sw2.setOnCheckedChangeListener(execOverlayListener);
+
+        dlg.show();
+    }
+
+    private void startExecOverlay() {
+        if (execOverlayActive) {
+            Toast.makeText(this, "执行悬浮球已开启", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (sharedPreferences.getBoolean("record_overlay_active", false)) {
+            Toast.makeText(this, "录制悬浮球已开启，请先终止录制后再开启执行悬浮球", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                Intent permIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                startActivity(permIntent);
+                Toast.makeText(this, "请授予悬浮窗权限后重试", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        } catch (Exception ignored) {}
+        Intent intent = new Intent(this, RecordService.class);
+        intent.putExtra("exec_overlay", true);
+        startService(intent);
+        execOverlayActive = true;
+        try { sharedPreferences.edit().putBoolean("exec_overlay_active", true).apply(); } catch (Exception ignored) {}
+        //Toast.makeText(this, "已开启执行悬浮球，点击开始/终止执行", Toast.LENGTH_SHORT).show();
+    }
+
+    private void stopExecOverlay() {
+        Intent intent = new Intent(this, RecordService.class);
+        intent.putExtra("stop_overlay", true);
+        startService(intent);
+        execOverlayActive = false;
+        try { sharedPreferences.edit().putBoolean("exec_overlay_active", false).apply(); } catch (Exception ignored) {}
+        //Toast.makeText(this, "已关闭执行悬浮球", Toast.LENGTH_SHORT).show();
+    }
+
+    private int dp(int v) {
+        float d = getResources().getDisplayMetrics().density;
+        return (int) (v * d + 0.5f);
     }
 
     private void selectApp() {
@@ -1030,7 +1176,7 @@ public class MainActivity extends AppCompatActivity {
                                 .putInt(KEY_MAX_Y, maxY)
                                 .apply();
 
-                        Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show();
+                        //Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show();
                     } catch (NumberFormatException e) {
                         Toast.makeText(this, "请输入有效的数值", Toast.LENGTH_SHORT).show();
                     }
@@ -1056,7 +1202,10 @@ public class MainActivity extends AppCompatActivity {
         btnGetRoot.setAlpha(hasRootPermission ? 0.5f : 1f);
         try {
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            boolean ignoring = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            }
             tvBatteryStatus.setText(ignoring ? "已关闭优化" : "未关闭");
             btnIgnoreBattery.setEnabled(!ignoring);
             btnIgnoreBattery.setAlpha(ignoring ? 0.5f : 1f);
@@ -1157,7 +1306,10 @@ public class MainActivity extends AppCompatActivity {
         if (btnGetRoot != null) { btnGetRoot.setEnabled(!hasRootPermission); btnGetRoot.setAlpha(hasRootPermission ? 0.5f : 1f); }
         try {
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            boolean ignoring = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            }
             if (tvBatteryStatus != null) tvBatteryStatus.setText(ignoring ? "已关闭优化" : "未关闭");
             if (btnIgnoreBattery != null) { btnIgnoreBattery.setEnabled(!ignoring); btnIgnoreBattery.setAlpha(ignoring ? 0.5f : 1f); }
         } catch (Exception e) { if (tvBatteryStatus != null) tvBatteryStatus.setText("未知"); }
@@ -1187,6 +1339,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startRecordingOverlay() {
+        if (execOverlayActive) {
+            Toast.makeText(this, "执行悬浮球已开启，请先在“执行”弹窗中关闭", Toast.LENGTH_SHORT).show();
+            return;
+        }
         String tdCheck = sharedPreferences.getString(KEY_TOUCH_DEVICE, "");
         if (TextUtils.isEmpty(tdCheck)) {
             new AlertDialog.Builder(this)
@@ -1243,7 +1399,7 @@ public class MainActivity extends AppCompatActivity {
         startService(intent);
         btnStartRecording.setText("终止录制");
         sharedPreferences.edit().putBoolean("record_overlay_active", true).apply();
-        Toast.makeText(this, "已开启悬浮球，点击开始/结束录制", Toast.LENGTH_SHORT).show();
+        //Toast.makeText(this, "已开启悬浮球，点击开始/结束录制", Toast.LENGTH_SHORT).show();
     }
 
     private void stopRecordingOverlay(boolean cancelSteps) {

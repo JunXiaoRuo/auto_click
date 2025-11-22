@@ -24,6 +24,8 @@ import android.content.pm.ServiceInfo;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import android.util.Log;
+import android.content.SharedPreferences;
+import android.text.TextUtils;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
@@ -44,6 +46,10 @@ public class RecordService extends Service {
     private boolean keepAliveActive = false;
     private Process volKeyProc;
     private Thread volKeyThread;
+    private boolean overlayExecute = false;
+    private boolean executing = false;
+    private Thread execThread;
+    private volatile boolean execStopRequested = false;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -78,6 +84,11 @@ public class RecordService extends Service {
                         sendBroadcast(done);
                     }
                 }
+                if (executing) {
+                    execStopRequested = true;
+                    try { if (execThread != null) execThread.interrupt(); } catch (Exception ignored) {}
+                    executing = false;
+                }
             } catch (Exception ignored) {}
             removeFloatingBall();
             if (!keepAliveActive) {
@@ -90,10 +101,18 @@ public class RecordService extends Service {
             Toast.makeText(this, "悬浮球已开启", Toast.LENGTH_SHORT).show();
             return START_STICKY;
         }
+        boolean execOverlay = intent != null && intent.getBooleanExtra("exec_overlay", false);
+        if (execOverlay) {
+            overlayExecute = true;
+            showExecuteBall();
+            return START_STICKY;
+        }
+
         touchDevice = intent != null ? intent.getStringExtra("touch_device") : null;
         maxX = intent != null ? intent.getIntExtra("max_x", 0) : 0;
         maxY = intent != null ? intent.getIntExtra("max_y", 0) : 0;
 
+        overlayExecute = false;
         showFloatingBall();
         return START_STICKY;
     }
@@ -215,6 +234,76 @@ public class RecordService extends Service {
         // no foreground for overlay
     }
 
+    private void showExecuteBall() {
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        floatView = new FrameLayout(this);
+        ballView = new android.widget.TextView(this);
+        ballView.setText("执行");
+        ballView.setTextColor(Color.WHITE);
+        ballView.setTextSize(14);
+        int size = dp(56);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size);
+        lp.gravity = Gravity.CENTER;
+        ballView.setLayoutParams(lp);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.parseColor("#5500BCD4"));
+        bg.setCornerRadius(size/2f);
+        ballView.setBackground(bg);
+        ballView.setGravity(Gravity.CENTER);
+        floatView.addView(ballView);
+
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = 50;
+        params.y = 200;
+        ballParams = params;
+
+        floatView.setOnTouchListener(new View.OnTouchListener() {
+            private int lastX, lastY;
+            private float touchX, touchY;
+            private long downTime;
+            private int touchSlop = dp(12);
+            @Override
+            public boolean onTouch(View v, android.view.MotionEvent event) {
+                switch (event.getAction()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        lastX = params.x;
+                        lastY = params.y;
+                        touchX = event.getRawX();
+                        touchY = event.getRawY();
+                        downTime = System.currentTimeMillis();
+                        return true;
+                    case android.view.MotionEvent.ACTION_MOVE:
+                        params.x = lastX + (int)(event.getRawX() - touchX);
+                        params.y = lastY + (int)(event.getRawY() - touchY);
+                        try { windowManager.updateViewLayout(floatView, params); } catch (Exception ignored) {}
+                        ballParams = params;
+                        return true;
+                    case android.view.MotionEvent.ACTION_UP:
+                        float dx = event.getRawX() - touchX;
+                        float dy = event.getRawY() - touchY;
+                        long dt = System.currentTimeMillis() - downTime;
+                        if (Math.abs(dx) < touchSlop && Math.abs(dy) < touchSlop && dt < 500) {
+                            toggleExecute(ballView);
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
+        windowManager.addView(floatView, params);
+        Toast.makeText(this, "点击悬浮球开始/终止执行", Toast.LENGTH_SHORT).show();
+
+        startVolumeKeyMonitor();
+    }
+
     private void updateExcludeRect(WindowManager.LayoutParams params, View v) {
         if (v == null || recorder == null) return;
         v.post(() -> {
@@ -255,6 +344,83 @@ public class RecordService extends Service {
                 stopSelf();
             }
         }
+    }
+
+    private void toggleExecute(android.widget.TextView ball) {
+        if (!executing) {
+            android.graphics.drawable.GradientDrawable bg = (android.graphics.drawable.GradientDrawable) ball.getBackground();
+            bg.setColor(Color.parseColor("#AAE91E63"));
+            ball.setText("终止");
+            execStopRequested = false;
+            executing = true;
+            execThread = new Thread(this::runExecute, "execute_thread");
+            execThread.start();
+            Toast.makeText(this, "开始执行步骤", Toast.LENGTH_SHORT).show();
+        } else {
+            android.graphics.drawable.GradientDrawable bg = (android.graphics.drawable.GradientDrawable) ball.getBackground();
+            bg.setColor(Color.parseColor("#5500BCD4"));
+            ball.setText("执行");
+            execStopRequested = true;
+            try { if (execThread != null) execThread.interrupt(); } catch (Exception ignored) {}
+            executing = false;
+            Toast.makeText(this, "已终止执行", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void runExecute() {
+        try {
+            SharedPreferences sp = getSharedPreferences("ClickConfig", MODE_PRIVATE);
+            String schemesJson = sp.getString("schemes", "");
+            String current = sp.getString("current_scheme", "");
+            ArrayList<Scheme> schemes = TextUtils.isEmpty(schemesJson) ? new ArrayList<>() : Scheme.fromJsonArray(schemesJson);
+            Scheme scheme = null;
+            for (Scheme s : schemes) { if (s.name.equals(current)) { scheme = s; break; } }
+            if (scheme == null) return;
+            int clickDuration = sp.getInt("click_duration", 50);
+            int longPressDuration = sp.getInt("long_press_duration", 500);
+            int swipeDuration = sp.getInt("swipe_duration", 100);
+            if (!TextUtils.isEmpty(scheme.appActivity)) {
+                try { Runtime.getRuntime().exec("su -c am start -n " + scheme.appActivity); } catch (Exception ignored) {}
+            }
+            for (Operation op : scheme.operations) {
+                if (execStopRequested) break;
+                try { Thread.sleep(op.delay); } catch (Exception ignored) {}
+                if (execStopRequested) break;
+                try {
+                    if (op.type == Operation.TYPE_CLICK) {
+                        Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
+                    } else if (op.type == Operation.TYPE_LONG_PRESS) {
+                        Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + longPressDuration).waitFor();
+                    } else {
+                        Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
+                    }
+                } catch (Exception ignored) {}
+            }
+            if (!execStopRequested) {
+                new android.os.Handler(getMainLooper()).post(() -> {
+                    Toast.makeText(getApplicationContext(), "执行完成", Toast.LENGTH_SHORT).show();
+                });
+                if (scheme.stopAppsEnabled && scheme.appsToStop != null && !scheme.appsToStop.isEmpty()) {
+                    try {
+                        for (String pkg : scheme.appsToStop) {
+                            Runtime.getRuntime().exec("su -c am force-stop " + pkg);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        } catch (Exception ignored) {}
+        android.widget.TextView ball = ballView;
+        if (ball != null) {
+            ball.post(() -> {
+                try {
+                    android.graphics.drawable.GradientDrawable bg = (android.graphics.drawable.GradientDrawable) ball.getBackground();
+                    bg.setColor(Color.parseColor("#5500BCD4"));
+                    ball.setText("执行");
+                } catch (Exception ignored2) {}
+            });
+        }
+        executing = false;
+        execStopRequested = false;
     }
 
     private void removeFloatingBall() {
@@ -329,12 +495,16 @@ public class RecordService extends Service {
                     boolean isDown = isDownLine(line);
                     if (!isDown) continue;
                     if (line.contains("EV_KEY") && line.contains("KEY_VOLUMEUP")) {
-                        if (!recording && ballView != null) {
-                            ballView.post(() -> toggleRecording(ballView));
+                        if (overlayExecute) {
+                            if (!executing && ballView != null) ballView.post(() -> toggleExecute(ballView));
+                        } else {
+                            if (!recording && ballView != null) ballView.post(() -> toggleRecording(ballView));
                         }
                     } else if (line.contains("EV_KEY") && line.contains("KEY_VOLUMEDOWN")) {
-                        if (recording && ballView != null) {
-                            ballView.post(() -> toggleRecording(ballView));
+                        if (overlayExecute) {
+                            if (executing && ballView != null) ballView.post(() -> toggleExecute(ballView));
+                        } else {
+                            if (recording && ballView != null) ballView.post(() -> toggleRecording(ballView));
                         }
                     }
                 }
