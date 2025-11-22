@@ -22,9 +22,10 @@ import android.media.AudioFocusRequest;
 import android.media.session.PlaybackState;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
-import android.view.KeyEvent;
 import androidx.core.app.NotificationCompat;
 import android.util.Log;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 import java.util.ArrayList;
 
@@ -41,6 +42,8 @@ public class RecordService extends Service {
     private android.widget.TextView ballView;
     private android.media.session.MediaSession mediaSession;
     private boolean keepAliveActive = false;
+    private Process volKeyProc;
+    private Thread volKeyThread;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -118,7 +121,7 @@ public class RecordService extends Service {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 type,
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 android.graphics.PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
@@ -164,23 +167,10 @@ public class RecordService extends Service {
             }
         });
         windowManager.addView(floatView, params);
-        floatView.setFocusable(true);
-        floatView.setFocusableInTouchMode(true);
-        floatView.requestFocus();
-        floatView.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && !recording) {
-                    toggleRecording(ballView);
-                    return true;
-                } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && recording) {
-                    toggleRecording(ballView);
-                    return true;
-                }
-            }
-            return false;
-        });
         updateExcludeRect(params, floatView);
         Toast.makeText(this, "点击悬浮球开始/结束录制", Toast.LENGTH_SHORT).show();
+
+        startVolumeKeyMonitor();
 
         try {
             mediaSession = new android.media.session.MediaSession(this, "record_session");
@@ -272,6 +262,7 @@ public class RecordService extends Service {
             try { windowManager.removeView(floatView); } catch (Exception ignored) {}
         }
         floatView = null;
+        stopVolumeKeyMonitor();
     }
 
     @Override
@@ -286,6 +277,7 @@ public class RecordService extends Service {
         if (!keepAliveActive) {
             try { stopForeground(true); } catch (Exception ignored) {}
         }
+        stopVolumeKeyMonitor();
         super.onDestroy();
     }
 
@@ -323,5 +315,56 @@ public class RecordService extends Service {
     private int dp(int v) {
         float d = getResources().getDisplayMetrics().density;
         return (int) (v * d + 0.5f);
+    }
+
+    private void startVolumeKeyMonitor() {
+        stopVolumeKeyMonitor();
+        volKeyThread = new Thread(() -> {
+            BufferedReader br = null;
+            try {
+                volKeyProc = Runtime.getRuntime().exec("su -c getevent -lt");
+                br = new BufferedReader(new InputStreamReader(volKeyProc.getInputStream()));
+                String line;
+                while (floatView != null && (line = br.readLine()) != null) {
+                    boolean isDown = isDownLine(line);
+                    if (!isDown) continue;
+                    if (line.contains("EV_KEY") && line.contains("KEY_VOLUMEUP")) {
+                        if (!recording && ballView != null) {
+                            ballView.post(() -> toggleRecording(ballView));
+                        }
+                    } else if (line.contains("EV_KEY") && line.contains("KEY_VOLUMEDOWN")) {
+                        if (recording && ballView != null) {
+                            ballView.post(() -> toggleRecording(ballView));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            } finally {
+                try { if (br != null) br.close(); } catch (Exception ignored) {}
+                try { if (volKeyProc != null) volKeyProc.destroy(); } catch (Exception ignored) {}
+                volKeyProc = null;
+            }
+        }, "vol_key_monitor");
+        volKeyThread.start();
+    }
+
+    private void stopVolumeKeyMonitor() {
+        try { if (volKeyProc != null) volKeyProc.destroy(); } catch (Exception ignored) {}
+        volKeyProc = null;
+        volKeyThread = null;
+    }
+
+    private boolean isDownLine(String line) {
+        if (line == null) return false;
+        if (line.contains("DOWN")) return true;
+        if (line.contains("UP")) return false;
+        try {
+            int idxSp = Math.max(line.lastIndexOf(' '), line.lastIndexOf('\t'));
+            if (idxSp >= 0) {
+                String last = line.substring(idxSp + 1).trim();
+                return Integer.parseInt(last, 16) == 1;
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 }
