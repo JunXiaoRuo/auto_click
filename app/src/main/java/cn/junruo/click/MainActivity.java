@@ -72,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SHOW_DEBUG = "show_debug";
     private static final String KEY_FIRST_ACTION_DELAY = "first_action_delay";
     private static final String KEY_KEEP_ALIVE = "keep_alive";
+    private static final String KEY_VOLUME_KEYS = "volume_keys_control";
     private static final String KEY_PERMISSIONS_DIALOG_SHOWN = "permissions_dialog_shown";
     private static final String KEY_ROOT_GRANTED = "root_granted";
     public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
@@ -1062,6 +1063,7 @@ public class MainActivity extends AppCompatActivity {
         android.widget.CheckBox cbFallbackNoXY = dialogView.findViewById(R.id.cb_fallback_no_xy);
         android.widget.CheckBox cbShowDebug = dialogView.findViewById(R.id.cb_show_debug);
         android.widget.CheckBox cbKeepAlive = dialogView.findViewById(R.id.cb_keep_alive);
+        android.widget.CheckBox cbVolumeKeys = dialogView.findViewById(R.id.cb_volume_keys);
         EditText etTouchDevice = dialogView.findViewById(R.id.et_touch_device);
         EditText etMaxX = dialogView.findViewById(R.id.et_max_x);
         EditText etMaxY = dialogView.findViewById(R.id.et_max_y);
@@ -1083,6 +1085,7 @@ public class MainActivity extends AppCompatActivity {
         cbFallbackNoXY.setChecked(sharedPreferences.getBoolean(KEY_FALLBACK_NO_XY, true));
         cbShowDebug.setChecked(sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false));
         cbKeepAlive.setChecked(sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false));
+        cbVolumeKeys.setChecked(sharedPreferences.getBoolean(KEY_VOLUME_KEYS, true));
 
         cbKeepAlive.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
@@ -1171,6 +1174,7 @@ public class MainActivity extends AppCompatActivity {
                                 .putBoolean(KEY_FALLBACK_NO_XY, cbFallbackNoXY.isChecked())
                                 .putBoolean(KEY_SHOW_DEBUG, showDebug)
                                 .putBoolean(KEY_KEEP_ALIVE, cbKeepAlive.isChecked())
+                                .putBoolean(KEY_VOLUME_KEYS, cbVolumeKeys.isChecked())
                                 .putString(KEY_TOUCH_DEVICE, touchDevice)
                                 .putInt(KEY_MAX_X, maxX)
                                 .putInt(KEY_MAX_Y, maxY)
@@ -1564,11 +1568,15 @@ public class MainActivity extends AppCompatActivity {
                             int firstDelay = sharedPreferences.getInt(KEY_FIRST_ACTION_DELAY, 2000);
                             if (!ops.isEmpty()) ops.get(0).delay = firstDelay;
                         } catch (Exception ignored) {}
-                        operations.clear();
-                        operations.addAll(ops);
-                        operationAdapter.notifyDataSetChanged();
-                        saveCurrentSchemeWithToast();
-                        Toast.makeText(MainActivity.this, "录制完成，已填入步骤", Toast.LENGTH_SHORT).show();
+                        if (!ops.isEmpty()) {
+                            operations.clear();
+                            operations.addAll(ops);
+                            operationAdapter.notifyDataSetChanged();
+                            saveCurrentSchemeWithToast();
+                            Toast.makeText(MainActivity.this, "录制完成，已填入步骤", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(MainActivity.this, "未录入任何动作，保留原有步骤", Toast.LENGTH_SHORT).show();
+                        }
                         sharedPreferences.edit().putBoolean("record_overlay_active", false).apply();
                         if (btnStartRecording != null) btnStartRecording.setText("录制动作");
                     }

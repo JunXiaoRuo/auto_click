@@ -189,44 +189,47 @@ public class RecordService extends Service {
         updateExcludeRect(params, floatView);
         Toast.makeText(this, "点击悬浮球开始/结束录制", Toast.LENGTH_SHORT).show();
 
-        startVolumeKeyMonitor();
+        boolean volKeys = getSharedPreferences("ClickConfig", MODE_PRIVATE).getBoolean("volume_keys_control", true);
+        if (volKeys) startVolumeKeyMonitor();
 
         try {
-            mediaSession = new android.media.session.MediaSession(this, "record_session");
-            android.media.VolumeProvider vp = new android.media.VolumeProvider(android.media.VolumeProvider.VOLUME_CONTROL_RELATIVE, 100, 50) {
-                @Override
-                public void onAdjustVolume(int direction) {
-                    if (direction > 0 && !recording) {
-                        toggleRecording(ballView);
-                    } else if (direction < 0 && recording) {
-                        toggleRecording(ballView);
+            if (volKeys) {
+                mediaSession = new android.media.session.MediaSession(this, "record_session");
+                android.media.VolumeProvider vp = new android.media.VolumeProvider(android.media.VolumeProvider.VOLUME_CONTROL_RELATIVE, 100, 50) {
+                    @Override
+                    public void onAdjustVolume(int direction) {
+                        if (direction > 0 && !recording) {
+                            toggleRecording(ballView);
+                        } else if (direction < 0 && recording) {
+                            toggleRecording(ballView);
+                        }
                     }
-                }
-            };
-            mediaSession.setFlags(android.media.session.MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | android.media.session.MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
-            PlaybackState state = new PlaybackState.Builder()
-                    .setState(PlaybackState.STATE_PLAYING, 0, 1f)
-                    .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
-                    .build();
-            mediaSession.setPlaybackState(state);
-            mediaSession.setPlaybackToRemote(vp);
-            mediaSession.setActive(true);
-
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build();
-            AudioFocusRequest afr = null;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                afr = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                        .setAudioAttributes(attrs)
-                        .setOnAudioFocusChangeListener(focusChange -> {})
+                };
+                mediaSession.setFlags(android.media.session.MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | android.media.session.MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+                PlaybackState state = new PlaybackState.Builder()
+                        .setState(PlaybackState.STATE_PLAYING, 0, 1f)
+                        .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
                         .build();
-            }
-            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            if (am != null) {
+                mediaSession.setPlaybackState(state);
+                mediaSession.setPlaybackToRemote(vp);
+                mediaSession.setActive(true);
+
+                AudioAttributes attrs = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build();
+                AudioFocusRequest afr = null;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    am.requestAudioFocus(afr);
+                    afr = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                            .setAudioAttributes(attrs)
+                            .setOnAudioFocusChangeListener(focusChange -> {})
+                            .build();
+                }
+                AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+                if (am != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        am.requestAudioFocus(afr);
+                    }
                 }
             }
         } catch (Exception ignored) {}
@@ -301,7 +304,8 @@ public class RecordService extends Service {
         windowManager.addView(floatView, params);
         Toast.makeText(this, "点击悬浮球开始/终止执行", Toast.LENGTH_SHORT).show();
 
-        startVolumeKeyMonitor();
+        boolean volKeys2 = getSharedPreferences("ClickConfig", MODE_PRIVATE).getBoolean("volume_keys_control", true);
+        if (volKeys2) startVolumeKeyMonitor();
     }
 
     private void updateExcludeRect(WindowManager.LayoutParams params, View v) {
