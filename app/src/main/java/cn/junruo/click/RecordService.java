@@ -105,6 +105,10 @@ public class RecordService extends Service {
         if (execOverlay) {
             overlayExecute = true;
             showExecuteBall();
+            boolean autoStart = intent != null && intent.getBooleanExtra("auto_start_exec", false);
+            if (autoStart && ballView != null) {
+                ballView.post(() -> toggleExecute(ballView));
+            }
             return START_STICKY;
         }
 
@@ -383,22 +387,40 @@ public class RecordService extends Service {
             int clickDuration = sp.getInt("click_duration", 50);
             int longPressDuration = sp.getInt("long_press_duration", 500);
             int swipeDuration = sp.getInt("swipe_duration", 100);
+            int loopIntervalMs = Math.max(0, sp.getInt("exec_loop_interval_ms", 1000));
+            boolean loopNotify = sp.getBoolean("exec_loop_notify", false);
             if (!TextUtils.isEmpty(scheme.appActivity)) {
                 try { Runtime.getRuntime().exec("su -c am start -n " + scheme.appActivity); } catch (Exception ignored) {}
             }
-            for (Operation op : scheme.operations) {
-                if (execStopRequested) break;
-                try { Thread.sleep(op.delay); } catch (Exception ignored) {}
-                if (execStopRequested) break;
-                try {
-                    if (op.type == Operation.TYPE_CLICK) {
-                        Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
-                    } else if (op.type == Operation.TYPE_LONG_PRESS) {
-                        Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + longPressDuration).waitFor();
-                    } else {
-                        Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
-                    }
-                } catch (Exception ignored) {}
+            int loops = Math.max(1, sp.getInt("exec_loop_count", 1));
+            boolean forever = sp.getBoolean("exec_loop_forever", false);
+            int i = 0;
+            while (!execStopRequested && (forever || i < loops)) {
+                for (Operation op : scheme.operations) {
+                    if (execStopRequested) break;
+                    try { Thread.sleep(op.delay); } catch (Exception ignored) {}
+                    if (execStopRequested) break;
+                    try {
+                        if (op.type == Operation.TYPE_CLICK) {
+                            Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
+                        } else if (op.type == Operation.TYPE_LONG_PRESS) {
+                            Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + longPressDuration).waitFor();
+                        } else {
+                            Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
+                        }
+                    } catch (Exception ignored) {}
+                }
+                i++;
+                final int doneLoops = i;
+                final String totalStr = forever ? "∞" : String.valueOf(loops);
+                if (loopNotify) {
+                    new android.os.Handler(getMainLooper()).post(() -> {
+                        Toast.makeText(getApplicationContext(), "已循环" + doneLoops + "次，共" + totalStr + "次", Toast.LENGTH_SHORT).show();
+                    });
+                }
+                if (!execStopRequested && (forever || doneLoops < loops) && loopIntervalMs > 0) {
+                    try { Thread.sleep(loopIntervalMs); } catch (Exception ignored) {}
+                }
             }
             if (!execStopRequested) {
                 new android.os.Handler(getMainLooper()).post(() -> {

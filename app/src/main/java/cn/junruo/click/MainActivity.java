@@ -73,6 +73,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_FIRST_ACTION_DELAY = "first_action_delay";
     private static final String KEY_KEEP_ALIVE = "keep_alive";
     private static final String KEY_VOLUME_KEYS = "volume_keys_control";
+    private static final String KEY_EXEC_LOOP_COUNT = "exec_loop_count";
+    private static final String KEY_EXEC_LOOP_FOREVER = "exec_loop_forever";
+    private static final String KEY_EXEC_LOOP_INTERVAL_MS = "exec_loop_interval_ms";
+    private static final String KEY_EXEC_LOOP_NOTIFY = "exec_loop_notify";
     private static final String KEY_PERMISSIONS_DIALOG_SHOWN = "permissions_dialog_shown";
     private static final String KEY_ROOT_GRANTED = "root_granted";
     public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
@@ -648,7 +652,7 @@ public class MainActivity extends AppCompatActivity {
                     countdownHandler.postDelayed(this, 1000);
                 } else {
                     dialog.dismiss();
-                    startAutoClick();
+                    startExecOverlay(true);
                 }
             }
         };
@@ -745,6 +749,46 @@ public class MainActivity extends AppCompatActivity {
         row2.addView(sw2);
         root.addView(row2);
 
+        android.widget.LinearLayout row3 = new android.widget.LinearLayout(this);
+        row3.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        android.widget.TextView tv3 = new android.widget.TextView(this);
+        tv3.setText("循环次数");
+        tv3.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.EditText etLoopCount = new android.widget.EditText(this);
+        etLoopCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        etLoopCount.setHint("1");
+        etLoopCount.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        etLoopCount.setText(String.valueOf(Math.max(1, sharedPreferences.getInt(KEY_EXEC_LOOP_COUNT, 1))));
+        android.widget.CheckBox cbLoopForever = new android.widget.CheckBox(this);
+        cbLoopForever.setText("一直执行下去");
+        cbLoopForever.setChecked(sharedPreferences.getBoolean(KEY_EXEC_LOOP_FOREVER, false));
+        row3.addView(tv3);
+        row3.addView(etLoopCount);
+        row3.addView(cbLoopForever);
+        root.addView(row3);
+
+        android.widget.LinearLayout row4 = new android.widget.LinearLayout(this);
+        row4.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        android.widget.TextView tv4 = new android.widget.TextView(this);
+        tv4.setText("循环间隔(ms)");
+        tv4.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.EditText etLoopInterval = new android.widget.EditText(this);
+        etLoopInterval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        etLoopInterval.setHint("1000");
+        etLoopInterval.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        etLoopInterval.setText(String.valueOf(Math.max(0, sharedPreferences.getInt(KEY_EXEC_LOOP_INTERVAL_MS, 1000))));
+        row4.addView(tv4);
+        row4.addView(etLoopInterval);
+        root.addView(row4);
+
+        android.widget.LinearLayout row5 = new android.widget.LinearLayout(this);
+        row5.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        android.widget.CheckBox cbLoopNotify = new android.widget.CheckBox(this);
+        cbLoopNotify.setText("每轮结束提示");
+        cbLoopNotify.setChecked(sharedPreferences.getBoolean(KEY_EXEC_LOOP_NOTIFY, false));
+        row5.addView(cbLoopNotify);
+        root.addView(row5);
+
         AlertDialog dlg = new AlertDialog.Builder(this)
                 .setTitle("执行")
                 .setView(root)
@@ -796,6 +840,35 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        cbLoopForever.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            etLoopCount.setEnabled(!isChecked);
+            sharedPreferences.edit().putBoolean(KEY_EXEC_LOOP_FOREVER, isChecked).apply();
+        });
+
+        etLoopCount.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                int v = parseIntSafe(s.toString());
+                if (v <= 0) v = 1;
+                sharedPreferences.edit().putInt(KEY_EXEC_LOOP_COUNT, v).apply();
+            }
+        });
+
+        cbLoopNotify.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            sharedPreferences.edit().putBoolean(KEY_EXEC_LOOP_NOTIFY, isChecked).apply();
+        });
+
+        etLoopInterval.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                int v = parseIntSafe(s.toString());
+                if (v < 0) v = 0;
+                sharedPreferences.edit().putInt(KEY_EXEC_LOOP_INTERVAL_MS, v).apply();
+            }
+        });
+
         CompoundButton.OnCheckedChangeListener execOverlayListener = new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -807,6 +880,14 @@ public class MainActivity extends AppCompatActivity {
                         sw2.setOnCheckedChangeListener(this);
                         return;
                     }
+                    int v = parseIntSafe(etLoopCount.getText().toString());
+                    if (v <= 0) v = 1;
+                    sharedPreferences.edit()
+                            .putInt(KEY_EXEC_LOOP_COUNT, v)
+                            .putBoolean(KEY_EXEC_LOOP_FOREVER, cbLoopForever.isChecked())
+                            .putInt(KEY_EXEC_LOOP_INTERVAL_MS, Math.max(0, parseIntSafe(etLoopInterval.getText().toString())))
+                            .putBoolean(KEY_EXEC_LOOP_NOTIFY, cbLoopNotify.isChecked())
+                            .apply();
                     startExecOverlay();
                 } else {
                     stopExecOverlay();
@@ -818,7 +899,7 @@ public class MainActivity extends AppCompatActivity {
         dlg.show();
     }
 
-    private void startExecOverlay() {
+    private void startExecOverlay(boolean autoStart) {
         if (execOverlayActive) {
             Toast.makeText(this, "执行悬浮球已开启", Toast.LENGTH_SHORT).show();
             return;
@@ -837,10 +918,14 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
         Intent intent = new Intent(this, RecordService.class);
         intent.putExtra("exec_overlay", true);
+        intent.putExtra("auto_start_exec", autoStart);
         startService(intent);
         execOverlayActive = true;
         try { sharedPreferences.edit().putBoolean("exec_overlay_active", true).apply(); } catch (Exception ignored) {}
-        //Toast.makeText(this, "已开启执行悬浮球，点击开始/终止执行", Toast.LENGTH_SHORT).show();
+    }
+
+    private void startExecOverlay() {
+        startExecOverlay(false);
     }
 
     private void stopExecOverlay() {
