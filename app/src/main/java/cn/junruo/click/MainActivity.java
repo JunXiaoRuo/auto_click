@@ -72,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SHOW_DEBUG = "show_debug";
     private static final String KEY_FIRST_ACTION_DELAY = "first_action_delay";
     private static final String KEY_KEEP_ALIVE = "keep_alive";
+    private static final String KEY_PERMISSIONS_DIALOG_SHOWN = "permissions_dialog_shown";
+    private static final String KEY_ROOT_GRANTED = "root_granted";
     public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
 
     // UI 组件
@@ -101,6 +103,7 @@ public class MainActivity extends AppCompatActivity {
     private BroadcastReceiver recordingReceiver;
     private boolean pendingStartKeepAlive = false;
     private static final String TAG = "MainActivity";
+    private AlertDialog permissionsDialog;
 
     // 修改onCreate方法中的初始化顺序
     @Override
@@ -121,7 +124,8 @@ public class MainActivity extends AppCompatActivity {
         initViews();// 初始化控件与事件
 
 
-        checkRootPermission();// 检查是否有ROOT权限
+        hasRootPermission = sharedPreferences.getBoolean(KEY_ROOT_GRANTED, false);
+        updateRootStatusUI();
 
 
         loadSchemes();// 加载已有的所有方案
@@ -144,6 +148,12 @@ public class MainActivity extends AppCompatActivity {
                 startKeepAliveServiceSafely();
             }
         }
+
+        boolean shown = sharedPreferences.getBoolean(KEY_PERMISSIONS_DIALOG_SHOWN, false);
+        if (!shown) {
+            showPermissionsDialog();
+            sharedPreferences.edit().putBoolean(KEY_PERMISSIONS_DIALOG_SHOWN, true).apply();
+        }
     }
 
     private void initViews() {
@@ -156,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
         lvOperations = findViewById(R.id.lv_operations);
         btnSettings = findViewById(R.id.btn_settings);
         tvRootStatus = findViewById(R.id.tv_root_status);
+        Button btnPermissions = findViewById(R.id.btn_permissions);
 
         // 设置适配器
         operationAdapter = new OperationAdapter(this, operations);
@@ -176,6 +187,9 @@ public class MainActivity extends AppCompatActivity {
 
         // 设置按钮点击监听器
         btnSettings.setOnClickListener(v -> showSettingsDialog());
+        if (btnPermissions != null) {
+            btnPermissions.setOnClickListener(v -> showPermissionsDialog());
+        }
 
         tvRootStatus.setOnClickListener(v -> {
             if (!hasRootPermission) {
@@ -543,21 +557,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isConfigValid() {
-        if (currentScheme == null) {
-            return false;
+        String appAct = currentScheme != null ? currentScheme.appActivity : "";
+        if (TextUtils.isEmpty(appAct)) {
+            appAct = sharedPreferences.getString(KEY_APP_ACTIVITY, "");
         }
-
-        boolean hasValidConfig = !TextUtils.isEmpty(currentScheme.appActivity)
-                && !currentScheme.operations.isEmpty();
-
+        boolean hasOps = currentScheme != null ? !currentScheme.operations.isEmpty() : !operations.isEmpty();
+        boolean hasValidConfig = !TextUtils.isEmpty(appAct) && hasOps;
         if (!hasValidConfig) {
-            if (TextUtils.isEmpty(currentScheme.appActivity)) {
+            if (TextUtils.isEmpty(appAct)) {
                 Toast.makeText(this, "请先选择目标应用", Toast.LENGTH_SHORT).show();
-            } else if (currentScheme.operations.isEmpty()) {
+            } else if (!hasOps) {
                 Toast.makeText(this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
             }
         }
-
         return hasValidConfig;
     }
 
@@ -681,15 +693,23 @@ public class MainActivity extends AppCompatActivity {
 
         builder.setItems(appNames.toArray(new String[0]), (dialog, which) -> {
             etAppActivity.setText(appNames.get(which));
-            if (currentScheme != null) {
-                currentScheme.appName = appNames.get(which);
-                currentScheme.appActivity = appActivities.get(which);
-                saveCurrentScheme();
+            if (currentScheme == null) {
+                Scheme def = findSchemeByName("默认方案");
+                if (def == null) {
+                    def = new Scheme("默认方案");
+                    schemes.add(def);
+                }
+                currentScheme = def;
+                updateSchemeSpinner();
             }
+            currentScheme.appName = appNames.get(which);
+            currentScheme.appActivity = appActivities.get(which);
+            saveCurrentScheme();
             sharedPreferences.edit()
                     .putString(KEY_APP_ACTIVITY, appActivities.get(which))
                     .putString(KEY_APP_NAME, appNames.get(which))
                     .apply();
+            Toast.makeText(this, "已选择并保存目标应用", Toast.LENGTH_SHORT).show();
         });
 
         builder.show();
@@ -877,19 +897,25 @@ public class MainActivity extends AppCompatActivity {
         cbKeepAlive.setChecked(sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false));
 
         cbKeepAlive.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, isChecked).apply();
             if (isChecked) {
-                ensureNotificationPermission();
-            if (Build.VERSION.SDK_INT >= 33 &&
-                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                pendingStartKeepAlive = true;
-                ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
-                android.util.Log.i(TAG, "Requesting POST_NOTIFICATIONS permission for keep-alive");
-                Toast.makeText(this, "需要通知权限以启用保活", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            startKeepAliveServiceSafely();
+                boolean notifyEnabled;
+                try {
+                    androidx.core.app.NotificationManagerCompat nmc = androidx.core.app.NotificationManagerCompat.from(this);
+                    boolean enabled = nmc.areNotificationsEnabled();
+                    boolean granted = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+                    notifyEnabled = enabled && granted;
+                } catch (Exception e) { notifyEnabled = false; }
+
+                if (notifyEnabled) {
+                    startKeepAliveServiceSafely();
+                    sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, true).apply();
+                } else {
+                    ensureNotificationPermission();
+                    buttonView.setChecked(false);
+                    sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, false).apply();
+                }
             } else {
+                sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, false).apply();
                 try {
                     Intent stop = new Intent(this, RecordService.class).putExtra("stop_keep_alive", true);
                     startService(stop);
@@ -969,6 +995,149 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    private void showPermissionsDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_permissions, null);
+        TextView tvRootPerm = dialogView.findViewById(R.id.tv_root_perm);
+        TextView tvBatteryStatus = dialogView.findViewById(R.id.tv_battery_status);
+        TextView tvNotifyStatus = dialogView.findViewById(R.id.tv_notify_status);
+        TextView tvOverlayStatus = dialogView.findViewById(R.id.tv_overlay_status);
+        Button btnGetRoot = dialogView.findViewById(R.id.btn_get_root);
+        Button btnIgnoreBattery = dialogView.findViewById(R.id.btn_ignore_battery);
+        Button btnOpenNotify = dialogView.findViewById(R.id.btn_open_notify);
+        Button btnOverlayPerm = dialogView.findViewById(R.id.btn_overlay_perm);
+        android.widget.CheckBox cbKeepAlivePerm = dialogView.findViewById(R.id.cb_keep_alive_perm);
+
+        tvRootPerm.setText(hasRootPermission ? "已获取" : "未获取");
+        btnGetRoot.setEnabled(!hasRootPermission);
+        btnGetRoot.setAlpha(hasRootPermission ? 0.5f : 1f);
+        try {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            tvBatteryStatus.setText(ignoring ? "已关闭优化" : "未关闭");
+            btnIgnoreBattery.setEnabled(!ignoring);
+            btnIgnoreBattery.setAlpha(ignoring ? 0.5f : 1f);
+        } catch (Exception e) {
+            tvBatteryStatus.setText("未知");
+        }
+        cbKeepAlivePerm.setChecked(sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false));
+        try {
+            androidx.core.app.NotificationManagerCompat nmc = androidx.core.app.NotificationManagerCompat.from(this);
+            boolean enabled = nmc.areNotificationsEnabled();
+            boolean granted = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+            boolean notifyOk = enabled && granted;
+            tvNotifyStatus.setText(notifyOk ? "已开启" : "未开启");
+            btnOpenNotify.setEnabled(!notifyOk);
+            btnOpenNotify.setAlpha(notifyOk ? 0.5f : 1f);
+        } catch (Exception e) {
+            tvNotifyStatus.setText("未知");
+        }
+        try {
+            boolean overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || android.provider.Settings.canDrawOverlays(this);
+            tvOverlayStatus.setText(overlayGranted ? "已授权" : "未授权");
+            btnOverlayPerm.setEnabled(!overlayGranted);
+            btnOverlayPerm.setAlpha(overlayGranted ? 0.5f : 1f);
+        } catch (Exception e) {
+            tvOverlayStatus.setText("未知");
+        }
+
+        btnGetRoot.setOnClickListener(v -> {
+            requestRootPermission();
+            tvRootPerm.setText(hasRootPermission ? "已获取" : "未获取");
+        });
+
+        btnIgnoreBattery.setOnClickListener(v -> {
+            try {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } catch (Exception ignored) {}
+        });
+
+        btnOpenNotify.setOnClickListener(v -> {
+            ensureNotificationPermission();
+        });
+
+        btnOverlayPerm.setOnClickListener(v -> {
+            try {
+                Intent i = new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                startActivity(i);
+            } catch (Exception ignored) {}
+        });
+
+        cbKeepAlivePerm.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                boolean notifyEnabled;
+                try {
+                    androidx.core.app.NotificationManagerCompat nmc = androidx.core.app.NotificationManagerCompat.from(this);
+                    boolean enabled = nmc.areNotificationsEnabled();
+                    boolean granted = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+                    notifyEnabled = enabled && granted;
+                } catch (Exception e) { notifyEnabled = false; }
+
+                if (notifyEnabled) {
+                    startKeepAliveServiceSafely();
+                    sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, true).apply();
+                } else {
+                    ensureNotificationPermission();
+                    buttonView.setChecked(false);
+                    sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, false).apply();
+                }
+            } else {
+                sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, false).apply();
+                try {
+                    Intent stop = new Intent(this, RecordService.class).putExtra("stop_keep_alive", true);
+                    startService(stop);
+                } catch (Exception ignored) {}
+            }
+        });
+
+        permissionsDialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setTitle("权限设置")
+                .setNegativeButton("关闭", (d, w) -> { permissionsDialog = null; })
+                .create();
+        permissionsDialog.show();
+    }
+
+    private void refreshPermissionsDialogStatuses() {
+        if (permissionsDialog == null || !permissionsDialog.isShowing()) return;
+        TextView tvRootPerm = permissionsDialog.findViewById(R.id.tv_root_perm);
+        TextView tvBatteryStatus = permissionsDialog.findViewById(R.id.tv_battery_status);
+        TextView tvNotifyStatus = permissionsDialog.findViewById(R.id.tv_notify_status);
+        TextView tvOverlayStatus = permissionsDialog.findViewById(R.id.tv_overlay_status);
+        Button btnGetRoot = permissionsDialog.findViewById(R.id.btn_get_root);
+        Button btnIgnoreBattery = permissionsDialog.findViewById(R.id.btn_ignore_battery);
+        Button btnOpenNotify = permissionsDialog.findViewById(R.id.btn_open_notify);
+        Button btnOverlayPerm = permissionsDialog.findViewById(R.id.btn_overlay_perm);
+        if (tvRootPerm != null) tvRootPerm.setText(hasRootPermission ? "已获取" : "未获取");
+        if (btnGetRoot != null) { btnGetRoot.setEnabled(!hasRootPermission); btnGetRoot.setAlpha(hasRootPermission ? 0.5f : 1f); }
+        try {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+            if (tvBatteryStatus != null) tvBatteryStatus.setText(ignoring ? "已关闭优化" : "未关闭");
+            if (btnIgnoreBattery != null) { btnIgnoreBattery.setEnabled(!ignoring); btnIgnoreBattery.setAlpha(ignoring ? 0.5f : 1f); }
+        } catch (Exception e) { if (tvBatteryStatus != null) tvBatteryStatus.setText("未知"); }
+        try {
+            androidx.core.app.NotificationManagerCompat nmc = androidx.core.app.NotificationManagerCompat.from(this);
+            boolean enabled = nmc.areNotificationsEnabled();
+            boolean granted = Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+            if (tvNotifyStatus != null) tvNotifyStatus.setText(enabled && granted ? "已开启" : "未开启");
+            boolean notifyOk = enabled && granted;
+            if (btnOpenNotify != null) { btnOpenNotify.setEnabled(!notifyOk); btnOpenNotify.setAlpha(notifyOk ? 0.5f : 1f); }
+        } catch (Exception e) { if (tvNotifyStatus != null) tvNotifyStatus.setText("未知"); }
+        try {
+            boolean overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || android.provider.Settings.canDrawOverlays(this);
+            if (tvOverlayStatus != null) tvOverlayStatus.setText(overlayGranted ? "已授权" : "未授权");
+            if (btnOverlayPerm != null) { btnOverlayPerm.setEnabled(!overlayGranted); btnOverlayPerm.setAlpha(overlayGranted ? 0.5f : 1f); }
+        } catch (Exception e) { if (tvOverlayStatus != null) tvOverlayStatus.setText("未知"); }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshPermissionsDialogStatuses();
     }
 
     private int parseIntSafe(String s) {
@@ -1131,6 +1300,7 @@ public class MainActivity extends AppCompatActivity {
     private void checkRootPermission() {
         new Thread(() -> {
             hasRootPermission = hasRootPermission();
+            sharedPreferences.edit().putBoolean(KEY_ROOT_GRANTED, hasRootPermission).apply();
             runOnUiThread(() -> updateRootStatusUI());
         }).start();
     }
@@ -1244,11 +1414,7 @@ public class MainActivity extends AppCompatActivity {
                         .setNegativeButton("取消", null)
                         .show();
             }
-            if (Build.VERSION.SDK_INT >= 33) {
-                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
-                }
-            }
+            // 在此处仅提示并跳转系统设置，不主动弹出运行时权限弹窗
         } catch (Exception ignored) {}
     }
 

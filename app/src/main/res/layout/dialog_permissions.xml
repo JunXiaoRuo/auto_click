@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="权限设置"
+            android:textStyle="bold"
+            android:textSize="18sp"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#929292"
+            android:layout_marginTop="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ROOT权限"/>
+
+            <TextView
+                android:id="@+id/tv_root_perm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未知"/>
+
+            <Button
+                android:id="@+id/btn_get_root"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="获取"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="通知权限"/>
+
+            <TextView
+                android:id="@+id/tv_notify_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未知"/>
+
+            <Button
+                android:id="@+id/btn_open_notify"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="去设置"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="悬浮窗权限"/>
+
+            <TextView
+                android:id="@+id/tv_overlay_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未知"/>
+
+            <Button
+                android:id="@+id/btn_overlay_perm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="去设置"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="电池优化"/>
+
+            <TextView
+                android:id="@+id/tv_battery_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未知"/>
+
+            <Button
+                android:id="@+id/btn_ignore_battery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="关闭优化"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
+
+            <CheckBox
+                android:id="@+id/cb_keep_alive_perm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="服务保活(常驻通知)"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
