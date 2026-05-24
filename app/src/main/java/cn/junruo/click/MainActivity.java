@@ -67,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_TOUCH_DEVICE = "touch_device";
     private static final String KEY_MAX_X = "max_x";
     private static final String KEY_MAX_Y = "max_y";
+    private static final String KEY_COORDINATE_ROTATION_MODE = "coordinate_rotation_mode";
     private static final String KEY_MOVE_TOLERANCE_PX = "move_tolerance_px";
     private static final String KEY_MOTION_THRESHOLD = "motion_threshold";
     private static final String KEY_SHOW_DEBUG = "show_debug";
@@ -1152,6 +1153,7 @@ public class MainActivity extends AppCompatActivity {
         EditText etTouchDevice = dialogView.findViewById(R.id.et_touch_device);
         EditText etMaxX = dialogView.findViewById(R.id.et_max_x);
         EditText etMaxY = dialogView.findViewById(R.id.et_max_y);
+        Spinner spCoordinateRotation = dialogView.findViewById(R.id.sp_coordinate_rotation);
         Button btnAutoDetect = dialogView.findViewById(R.id.btn_auto_detect_device);
         TextView tvScreenPx = dialogView.findViewById(R.id.tv_screen_px);
 
@@ -1202,6 +1204,9 @@ public class MainActivity extends AppCompatActivity {
         etTouchDevice.setText(sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
         etMaxX.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_X, 0)));
         etMaxY.setText(String.valueOf(sharedPreferences.getInt(KEY_MAX_Y, 0)));
+        if (spCoordinateRotation != null) {
+            spCoordinateRotation.setSelection(sharedPreferences.getInt(KEY_COORDINATE_ROTATION_MODE, 0));
+        }
 
         try {
             int w = 0, h = 0;
@@ -1248,6 +1253,7 @@ public class MainActivity extends AppCompatActivity {
                         String touchDevice = etTouchDevice.getText().toString().trim();
                         int maxX = parseIntSafe(etMaxX.getText().toString());
                         int maxY = parseIntSafe(etMaxY.getText().toString());
+                        int coordinateRotationMode = spCoordinateRotation != null ? spCoordinateRotation.getSelectedItemPosition() : 0;
 
                         sharedPreferences.edit()
                                 .putInt(KEY_CLICK_DURATION, clickDuration)
@@ -1263,6 +1269,7 @@ public class MainActivity extends AppCompatActivity {
                                 .putString(KEY_TOUCH_DEVICE, touchDevice)
                                 .putInt(KEY_MAX_X, maxX)
                                 .putInt(KEY_MAX_Y, maxY)
+                                .putInt(KEY_COORDINATE_ROTATION_MODE, coordinateRotationMode)
                                 .apply();
 
                         //Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show();
@@ -1485,6 +1492,7 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("touch_device", sharedPreferences.getString(KEY_TOUCH_DEVICE, ""));
         intent.putExtra("max_x", sharedPreferences.getInt(KEY_MAX_X, 0));
         intent.putExtra("max_y", sharedPreferences.getInt(KEY_MAX_Y, 0));
+        intent.putExtra("coordinate_rotation_mode", sharedPreferences.getInt(KEY_COORDINATE_ROTATION_MODE, 0));
         startService(intent);
         btnStartRecording.setText("终止录制");
         sharedPreferences.edit().putBoolean("record_overlay_active", true).apply();

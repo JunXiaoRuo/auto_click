@@ -40,6 +40,7 @@ public class RecordService extends Service {
     private String touchDevice;
     private int maxX;
     private int maxY;
+    private int coordinateRotationMode;
     private WindowManager.LayoutParams ballParams;
     private android.widget.TextView ballView;
     private android.media.session.MediaSession mediaSession;
@@ -115,6 +116,7 @@ public class RecordService extends Service {
         touchDevice = intent != null ? intent.getStringExtra("touch_device") : null;
         maxX = intent != null ? intent.getIntExtra("max_x", 0) : 0;
         maxY = intent != null ? intent.getIntExtra("max_y", 0) : 0;
+        coordinateRotationMode = intent != null ? intent.getIntExtra("coordinate_rotation_mode", 0) : 0;
 
         overlayExecute = false;
         showFloatingBall();
@@ -326,7 +328,7 @@ public class RecordService extends Service {
             android.graphics.drawable.GradientDrawable bg = (android.graphics.drawable.GradientDrawable) ball.getBackground();
             bg.setColor(Color.parseColor("#AAE91E63"));
             ball.setText("结束");
-            recorder = new EventRecorder(getApplicationContext(), touchDevice, maxX, maxY);
+            recorder = new EventRecorder(getApplicationContext(), touchDevice, maxX, maxY, coordinateRotationMode);
             recorder.start();
             if (ballParams != null) updateExcludeRect(ballParams, floatView);
             recording = true;

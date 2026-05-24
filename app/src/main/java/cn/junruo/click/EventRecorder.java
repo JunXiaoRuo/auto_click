@@ -9,10 +9,14 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 
 class EventRecorder {
+    private static final int ROTATION_MODE_AUTO = 0;
+    private static final int ROTATION_MODE_OFF = 1;
+    private static final int ROTATION_MODE_REVERSE_LANDSCAPE = 2;
     private final Context context;
     private final String devicePath;
     private final int maxX;
     private final int maxY;
+    private final int coordinateRotationMode;
     private Process process;
     private Thread thread;
     private volatile boolean running = false;
@@ -20,6 +24,7 @@ class EventRecorder {
 
     private float screenW;
     private float screenH;
+    private int displayRotation = android.view.Surface.ROTATION_0;
     private volatile boolean suppressNextGesture = false;
     private int exLeft = -1, exTop = -1, exRight = -1, exBottom = -1;
     private int currentSlot = 0;
@@ -36,11 +41,12 @@ class EventRecorder {
     private StringBuilder rawSegment;
     private boolean fallbackNoXY = true;
 
-    EventRecorder(Context ctx, String devicePath, int maxX, int maxY) {
+    EventRecorder(Context ctx, String devicePath, int maxX, int maxY, int coordinateRotationMode) {
         this.context = ctx;
         this.devicePath = devicePath;
         this.maxX = maxX;
         this.maxY = maxY;
+        this.coordinateRotationMode = coordinateRotationMode;
         try {
             android.content.SharedPreferences sp = ctx.getSharedPreferences("ClickConfig", android.content.Context.MODE_PRIVATE);
             longPressDetectMs = sp.getInt("long_press_duration", 500);
@@ -52,18 +58,23 @@ class EventRecorder {
         WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
         try {
             if (wm != null) {
+                android.view.Display display = wm.getDefaultDisplay();
+                if (display != null) displayRotation = display.getRotation();
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                     android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
                     screenW = b.width();
                     screenH = b.height();
                 } else {
                     DisplayMetrics dm = new DisplayMetrics();
-                    android.view.Display d = wm.getDefaultDisplay();
-                    if (d != null) {
-                        d.getRealMetrics(dm);
+                    if (display != null) {
+                        display.getRealMetrics(dm);
                         screenW = dm.widthPixels;
                         screenH = dm.heightPixels;
                     }
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    android.view.Display d = ctx.getDisplay();
+                    if (d != null) displayRotation = d.getRotation();
                 }
             }
         } catch (Throwable ignored) {}
@@ -108,6 +119,7 @@ class EventRecorder {
             BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
             int lastX = -1, lastY = -1;
+            int rawLastX = -1, rawLastY = -1;
             int startX = -1, startY = -1;
             long gestureStartMs = 0;
             long lastEndMs = -1;
@@ -121,7 +133,10 @@ class EventRecorder {
                 // Example: [  327.549005] /dev/input/event3: EV_ABS ABS_MT_POSITION_X 0000039a
                 if (line.contains("EV_ABS") && line.contains("ABS_MT_POSITION_X")) {
                     int value = parseHexOrDecValue(line);
-                    lastX = mapX(value);
+                    rawLastX = value;
+                    int[] point = mapRawPoint(rawLastX, rawLastY);
+                    lastX = point[0];
+                    lastY = point[1];
                     if (touching) {
                         if ((startX < 0 || startY < 0) && lastX >= 0 && lastY >= 0) {
                             startX = lastX;
@@ -140,7 +155,10 @@ class EventRecorder {
                     }
                 } else if (line.contains("EV_ABS") && line.contains("ABS_MT_POSITION_Y")) {
                     int value = parseHexOrDecValue(line);
-                    lastY = mapY(value);
+                    rawLastY = value;
+                    int[] point = mapRawPoint(rawLastX, rawLastY);
+                    lastX = point[0];
+                    lastY = point[1];
                     if (touching) {
                         if ((startX < 0 || startY < 0) && lastX >= 0 && lastY >= 0) {
                             startX = lastX;
@@ -159,7 +177,10 @@ class EventRecorder {
                     }
                 } else if (line.contains("EV_ABS") && line.contains("ABS X")) {
                     int value = parseHexOrDecValue(line);
-                    lastX = mapX(value);
+                    rawLastX = value;
+                    int[] point = mapRawPoint(rawLastX, rawLastY);
+                    lastX = point[0];
+                    lastY = point[1];
                     if (touching) {
                         if ((startX < 0 || startY < 0) && lastX >= 0 && lastY >= 0) {
                             startX = lastX;
@@ -178,7 +199,10 @@ class EventRecorder {
                     }
                 } else if (line.contains("EV_ABS") && line.contains("ABS Y")) {
                     int value = parseHexOrDecValue(line);
-                    lastY = mapY(value);
+                    rawLastY = value;
+                    int[] point = mapRawPoint(rawLastX, rawLastY);
+                    lastX = point[0];
+                    lastY = point[1];
                     if (touching) {
                         if ((startX < 0 || startY < 0) && lastX >= 0 && lastY >= 0) {
                             startX = lastX;
@@ -212,6 +236,8 @@ class EventRecorder {
                         prevY = lastY;
                         lastX = -1;
                         lastY = -1;
+                        rawLastX = -1;
+                        rawLastY = -1;
                         motionSamples = 0;
                         synSamples = 0;
                         debug.append("BEGIN ts=").append(gestureStartMs).append(" x=").append(startX).append(" y=").append(startY).append('\n');
@@ -307,6 +333,8 @@ class EventRecorder {
                         prevY = lastY;
                         lastX = -1;
                         lastY = -1;
+                        rawLastX = -1;
+                        rawLastY = -1;
                         motionSamples = 0;
                         synSamples = 0;
                         debug.append("BEGIN ts=").append(gestureStartMs).append(" x=").append(startX).append(" y=").append(startY).append('\n');
@@ -443,20 +471,56 @@ class EventRecorder {
         recorded.add(op);
     }
 
-    private int mapX(int raw) {
-        if (maxX > 0 && screenW > 0) {
-            int v = (int) Math.round(raw * (screenW / (float) maxX));
-            return clamp(v, 0, (int) screenW - 1);
+    private int[] mapRawPoint(int rawX, int rawY) {
+        if (rawX < 0 || rawY < 0) return new int[]{-1, -1};
+        if (maxX <= 0 || maxY <= 0 || screenW <= 0 || screenH <= 0) {
+            return new int[]{rawX, rawY};
         }
-        return raw;
+
+        int w = (int) screenW;
+        int h = (int) screenH;
+        int x;
+        int y;
+        int rotation = getEffectiveRotation();
+        switch (rotation) {
+            case android.view.Surface.ROTATION_90:
+                x = scale(rawY, maxY, w);
+                y = h - 1 - scale(rawX, maxX, h);
+                break;
+            case android.view.Surface.ROTATION_180:
+                x = w - 1 - scale(rawX, maxX, w);
+                y = h - 1 - scale(rawY, maxY, h);
+                break;
+            case android.view.Surface.ROTATION_270:
+                x = w - 1 - scale(rawY, maxY, w);
+                y = scale(rawX, maxX, h);
+                break;
+            case android.view.Surface.ROTATION_0:
+            default:
+                x = scale(rawX, maxX, w);
+                y = scale(rawY, maxY, h);
+                break;
+        }
+        return new int[]{clamp(x, 0, w - 1), clamp(y, 0, h - 1)};
     }
 
-    private int mapY(int raw) {
-        if (maxY > 0 && screenH > 0) {
-            int v = (int) Math.round(raw * (screenH / (float) maxY));
-            return clamp(v, 0, (int) screenH - 1);
+    private int getEffectiveRotation() {
+        if (coordinateRotationMode == ROTATION_MODE_OFF) {
+            return android.view.Surface.ROTATION_0;
         }
-        return raw;
+        if (coordinateRotationMode == ROTATION_MODE_REVERSE_LANDSCAPE) {
+            if (displayRotation == android.view.Surface.ROTATION_90) {
+                return android.view.Surface.ROTATION_270;
+            }
+            if (displayRotation == android.view.Surface.ROTATION_270) {
+                return android.view.Surface.ROTATION_90;
+            }
+        }
+        return displayRotation;
+    }
+
+    private int scale(int raw, int rawMax, int displaySize) {
+        return (int) Math.round(raw * (displaySize / (float) rawMax));
     }
 
     private int clamp(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }

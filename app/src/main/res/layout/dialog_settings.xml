@@ -103,6 +103,27 @@
             android:text="无坐标长按回退(用上次坐标)"/>
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="坐标旋转修正:"/>
+
+        <Spinner
+            android:id="@+id/sp_coordinate_rotation"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:entries="@array/coordinate_rotation_modes"/>
+    </LinearLayout>
+
     
 
     <LinearLayout
