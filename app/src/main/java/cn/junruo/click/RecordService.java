@@ -30,6 +30,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 public class RecordService extends Service {
     private static final String TAG = "RecordService";
@@ -389,8 +390,16 @@ public class RecordService extends Service {
             int clickDuration = sp.getInt("click_duration", 50);
             int longPressDuration = sp.getInt("long_press_duration", 500);
             int swipeDuration = sp.getInt("swipe_duration", 100);
-            int loopIntervalMs = Math.max(0, sp.getInt("exec_loop_interval_ms", 1000));
+            int loopIntervalMs = Math.max(0, sp.getInt("exec_loop_interval_ms", 0));
             boolean loopNotify = sp.getBoolean("exec_loop_notify", false);
+            int randomOffsetMin = Math.max(0, sp.getInt("random_offset_min", 0));
+            int randomOffsetMax = Math.max(randomOffsetMin, sp.getInt("random_offset_max", 5));
+            int randomDelayMin = Math.max(0, sp.getInt("random_delay_min", 0));
+            int randomDelayMax = Math.max(randomDelayMin, sp.getInt("random_delay_max", 50));
+            boolean showTouchTrace = sp.getBoolean("show_touch_trace", false);
+            int touchTraceColor = parseTraceColor(sp.getString("touch_trace_color", "#FF4081"), sp.getInt("touch_trace_alpha", 160));
+            int[] screenSize = getScreenSize();
+            Random random = new Random();
             if (!TextUtils.isEmpty(scheme.appActivity)) {
                 try { Runtime.getRuntime().exec("su -c am start -n " + scheme.appActivity); } catch (Exception ignored) {}
             }
@@ -400,15 +409,24 @@ public class RecordService extends Service {
             while (!execStopRequested && (forever || i < loops)) {
                 for (Operation op : scheme.operations) {
                     if (execStopRequested) break;
-                    try { Thread.sleep(op.delay); } catch (Exception ignored) {}
+                    int delay = Math.max(0, op.delay + randomSignedInRange(random, randomDelayMin, randomDelayMax));
+                    try { Thread.sleep(delay); } catch (Exception ignored) {}
                     if (execStopRequested) break;
                     try {
+                        int[] p1 = randomizePoint(op.x1, op.y1, randomOffsetMin, randomOffsetMax, screenSize, random);
+                        int[] p2 = op.type == Operation.TYPE_SWIPE
+                                ? randomizePoint(op.x2, op.y2, randomOffsetMin, randomOffsetMax, screenSize, random)
+                                : p1;
                         if (op.type == Operation.TYPE_CLICK) {
-                            Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
+                            showTouchTrace(showTouchTrace, p1[0], p1[1], touchTraceColor);
+                            Runtime.getRuntime().exec("su -c input swipe " + p1[0] + " " + p1[1] + " " + p1[0] + " " + p1[1] + " " + clickDuration).waitFor();
                         } else if (op.type == Operation.TYPE_LONG_PRESS) {
-                            Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x1 + " " + op.y1 + " " + longPressDuration).waitFor();
+                            showTouchTrace(showTouchTrace, p1[0], p1[1], touchTraceColor);
+                            Runtime.getRuntime().exec("su -c input swipe " + p1[0] + " " + p1[1] + " " + p1[0] + " " + p1[1] + " " + longPressDuration).waitFor();
                         } else {
-                            Runtime.getRuntime().exec("su -c input swipe " + op.x1 + " " + op.y1 + " " + op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
+                            showTouchTrace(showTouchTrace, p1[0], p1[1], touchTraceColor);
+                            showTouchTrace(showTouchTrace, p2[0], p2[1], touchTraceColor);
+                            Runtime.getRuntime().exec("su -c input swipe " + p1[0] + " " + p1[1] + " " + p2[0] + " " + p2[1] + " " + swipeDuration).waitFor();
                         }
                     } catch (Exception ignored) {}
                 }
@@ -449,6 +467,99 @@ public class RecordService extends Service {
         }
         executing = false;
         execStopRequested = false;
+    }
+
+    private int[] randomizePoint(int x, int y, int offsetMin, int offsetMax, int[] screenSize, Random random) {
+        int rx = x + randomSignedInRange(random, offsetMin, offsetMax);
+        int ry = y + randomSignedInRange(random, offsetMin, offsetMax);
+        if (screenSize != null && screenSize[0] > 0 && screenSize[1] > 0) {
+            rx = clamp(rx, 0, screenSize[0] - 1);
+            ry = clamp(ry, 0, screenSize[1] - 1);
+        }
+        return new int[]{rx, ry};
+    }
+
+    private int randomSignedInRange(Random random, int min, int max) {
+        if (random == null || max <= 0) return 0;
+        int lo = Math.max(0, Math.min(min, max));
+        int hi = Math.max(lo, max);
+        int magnitude = lo + random.nextInt(hi - lo + 1);
+        return random.nextBoolean() ? magnitude : -magnitude;
+    }
+
+    private int[] getScreenSize() {
+        int w = 0, h = 0;
+        try {
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if (wm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
+                    w = b.width();
+                    h = b.height();
+                } else {
+                    android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+                    android.view.Display d = wm.getDefaultDisplay();
+                    if (d != null) {
+                        d.getRealMetrics(dm);
+                        w = dm.widthPixels;
+                        h = dm.heightPixels;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return new int[]{w, h};
+    }
+
+    private int parseTraceColor(String colorText, int alpha) {
+        int color;
+        try {
+            String value = colorText == null ? "" : colorText.trim();
+            if (!value.startsWith("#")) value = "#" + value;
+            color = Color.parseColor(value);
+        } catch (Exception e) {
+            color = Color.parseColor("#FF4081");
+        }
+        int a = clamp(alpha, 0, 255);
+        return (color & 0x00FFFFFF) | (a << 24);
+    }
+
+    private void showTouchTrace(boolean enabled, int x, int y, int color) {
+        if (!enabled) return;
+        new android.os.Handler(getMainLooper()).post(() -> {
+            try {
+                WindowManager wm = windowManager != null ? windowManager : (WindowManager) getSystemService(WINDOW_SERVICE);
+                if (wm == null) return;
+                int size = dp(28);
+                View dot = new View(this);
+                android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+                bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                bg.setColor(color);
+                bg.setStroke(Math.max(1, dp(2)), Color.WHITE);
+                dot.setBackground(bg);
+                int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
+                WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                        size,
+                        size,
+                        type,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                        android.graphics.PixelFormat.TRANSLUCENT
+                );
+                params.gravity = Gravity.TOP | Gravity.START;
+                params.x = x - size / 2;
+                params.y = y - size / 2;
+                wm.addView(dot, params);
+                dot.postDelayed(() -> {
+                    try { wm.removeView(dot); } catch (Exception ignored) {}
+                }, 450);
+            } catch (Exception ignored) {}
+        });
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private void removeFloatingBall() {

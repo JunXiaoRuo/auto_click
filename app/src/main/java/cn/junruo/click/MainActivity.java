@@ -78,6 +78,13 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_EXEC_LOOP_FOREVER = "exec_loop_forever";
     private static final String KEY_EXEC_LOOP_INTERVAL_MS = "exec_loop_interval_ms";
     private static final String KEY_EXEC_LOOP_NOTIFY = "exec_loop_notify";
+    private static final String KEY_RANDOM_OFFSET_MIN = "random_offset_min";
+    private static final String KEY_RANDOM_OFFSET_MAX = "random_offset_max";
+    private static final String KEY_RANDOM_DELAY_MIN = "random_delay_min";
+    private static final String KEY_RANDOM_DELAY_MAX = "random_delay_max";
+    private static final String KEY_SHOW_TOUCH_TRACE = "show_touch_trace";
+    private static final String KEY_TOUCH_TRACE_COLOR = "touch_trace_color";
+    private static final String KEY_TOUCH_TRACE_ALPHA = "touch_trace_alpha";
     private static final String KEY_PERMISSIONS_DIALOG_SHOWN = "permissions_dialog_shown";
     private static final String KEY_ROOT_GRANTED = "root_granted";
     public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
@@ -164,6 +171,7 @@ public class MainActivity extends AppCompatActivity {
             showPermissionsDialog();
             sharedPreferences.edit().putBoolean(KEY_PERMISSIONS_DIALOG_SHOWN, true).apply();
         }
+        autoDetectTouchDeviceIfNeeded();
 
         boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
         if (autoClickEnabled) {
@@ -682,6 +690,12 @@ public class MainActivity extends AppCompatActivity {
                 int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
                 int longPressDuration = sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION);
                 int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
+                int randomOffsetMin = Math.max(0, sharedPreferences.getInt(KEY_RANDOM_OFFSET_MIN, 0));
+                int randomOffsetMax = Math.max(randomOffsetMin, sharedPreferences.getInt(KEY_RANDOM_OFFSET_MAX, 5));
+                int randomDelayMin = Math.max(0, sharedPreferences.getInt(KEY_RANDOM_DELAY_MIN, 0));
+                int randomDelayMax = Math.max(randomDelayMin, sharedPreferences.getInt(KEY_RANDOM_DELAY_MAX, 50));
+                int[] screenSize = getScreenSize();
+                java.util.Random random = new java.util.Random();
 
                 // 启动目标Activity（可选）
                 if (!TextUtils.isEmpty(currentScheme.appActivity)) {
@@ -689,21 +703,25 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 for (Operation op : currentScheme.operations) {
-                    Thread.sleep(op.delay);
+                    Thread.sleep(Math.max(0, op.delay + randomSignedInRange(random, randomDelayMin, randomDelayMax)));
+                    int[] p1 = randomizePoint(op.x1, op.y1, randomOffsetMin, randomOffsetMax, screenSize, random);
+                    int[] p2 = op.type == Operation.TYPE_SWIPE
+                            ? randomizePoint(op.x2, op.y2, randomOffsetMin, randomOffsetMax, screenSize, random)
+                            : p1;
                     if (op.type == Operation.TYPE_CLICK) {
                         // 使用设置的点击持续时间
                         Runtime.getRuntime().exec(
-                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
-                                        op.x1 + " " + op.y1 + " " + clickDuration).waitFor();
+                                "su -c input swipe " + p1[0] + " " + p1[1] + " " +
+                                        p1[0] + " " + p1[1] + " " + clickDuration).waitFor();
                     } else if (op.type == Operation.TYPE_LONG_PRESS) {
                         Runtime.getRuntime().exec(
-                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
-                                        op.x1 + " " + op.y1 + " " + longPressDuration).waitFor();
+                                "su -c input swipe " + p1[0] + " " + p1[1] + " " +
+                                        p1[0] + " " + p1[1] + " " + longPressDuration).waitFor();
                     } else {
                         // 使用设置的滑动持续时间
                         Runtime.getRuntime().exec(
-                                "su -c input swipe " + op.x1 + " " + op.y1 + " " +
-                                        op.x2 + " " + op.y2 + " " + swipeDuration).waitFor();
+                                "su -c input swipe " + p1[0] + " " + p1[1] + " " +
+                                        p2[0] + " " + p2[1] + " " + swipeDuration).waitFor();
                     }
                 }
 
@@ -775,9 +793,9 @@ public class MainActivity extends AppCompatActivity {
         tv4.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         android.widget.EditText etLoopInterval = new android.widget.EditText(this);
         etLoopInterval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        etLoopInterval.setHint("1000");
+        etLoopInterval.setHint("0");
         etLoopInterval.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        etLoopInterval.setText(String.valueOf(Math.max(0, sharedPreferences.getInt(KEY_EXEC_LOOP_INTERVAL_MS, 1000))));
+        etLoopInterval.setText(String.valueOf(Math.max(0, sharedPreferences.getInt(KEY_EXEC_LOOP_INTERVAL_MS, 0))));
         row4.addView(tv4);
         row4.addView(etLoopInterval);
         root.addView(row4);
@@ -1143,11 +1161,18 @@ public class MainActivity extends AppCompatActivity {
         EditText etClickDuration = dialogView.findViewById(R.id.et_click_duration);
         EditText etSwipeDuration = dialogView.findViewById(R.id.et_swipe_duration);
         EditText etLongPressDuration = dialogView.findViewById(R.id.et_long_press_duration);
+        EditText etRandomOffsetMin = dialogView.findViewById(R.id.et_random_offset_min);
+        EditText etRandomOffsetMax = dialogView.findViewById(R.id.et_random_offset_max);
+        EditText etRandomDelayMin = dialogView.findViewById(R.id.et_random_delay_min);
+        EditText etRandomDelayMax = dialogView.findViewById(R.id.et_random_delay_max);
+        Button btnTouchTraceColor = dialogView.findViewById(R.id.btn_touch_trace_color);
+        EditText etTouchTraceAlpha = dialogView.findViewById(R.id.et_touch_trace_alpha);
         EditText etMoveTolerancePx = dialogView.findViewById(R.id.et_move_tolerance_px);
         EditText etMotionThreshold = dialogView.findViewById(R.id.et_motion_threshold);
         EditText etFirstActionDelay = dialogView.findViewById(R.id.et_first_action_delay);
         android.widget.CheckBox cbFallbackNoXY = dialogView.findViewById(R.id.cb_fallback_no_xy);
         android.widget.CheckBox cbShowDebug = dialogView.findViewById(R.id.cb_show_debug);
+        android.widget.CheckBox cbShowTouchTrace = dialogView.findViewById(R.id.cb_show_touch_trace);
         android.widget.CheckBox cbKeepAlive = dialogView.findViewById(R.id.cb_keep_alive);
         android.widget.CheckBox cbVolumeKeys = dialogView.findViewById(R.id.cb_volume_keys);
         EditText etTouchDevice = dialogView.findViewById(R.id.et_touch_device);
@@ -1163,6 +1188,14 @@ public class MainActivity extends AppCompatActivity {
                 sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION)));
         etLongPressDuration.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION)));
+        etRandomOffsetMin.setText(String.valueOf(sharedPreferences.getInt(KEY_RANDOM_OFFSET_MIN, 0)));
+        etRandomOffsetMax.setText(String.valueOf(sharedPreferences.getInt(KEY_RANDOM_OFFSET_MAX, 5)));
+        etRandomDelayMin.setText(String.valueOf(sharedPreferences.getInt(KEY_RANDOM_DELAY_MIN, 0)));
+        etRandomDelayMax.setText(String.valueOf(sharedPreferences.getInt(KEY_RANDOM_DELAY_MAX, 50)));
+        final String[] selectedTraceColor = {sharedPreferences.getString(KEY_TOUCH_TRACE_COLOR, "#FF4081")};
+        updateColorButton(btnTouchTraceColor, selectedTraceColor[0]);
+        btnTouchTraceColor.setOnClickListener(v -> showTraceColorPicker(selectedTraceColor, btnTouchTraceColor));
+        etTouchTraceAlpha.setText(String.valueOf(sharedPreferences.getInt(KEY_TOUCH_TRACE_ALPHA, 160)));
         etMoveTolerancePx.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_MOVE_TOLERANCE_PX, 20)));
         etMotionThreshold.setText(String.valueOf(
@@ -1171,6 +1204,7 @@ public class MainActivity extends AppCompatActivity {
                 sharedPreferences.getInt(KEY_FIRST_ACTION_DELAY, 2000)));
         cbFallbackNoXY.setChecked(sharedPreferences.getBoolean(KEY_FALLBACK_NO_XY, true));
         cbShowDebug.setChecked(sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false));
+        cbShowTouchTrace.setChecked(sharedPreferences.getBoolean(KEY_SHOW_TOUCH_TRACE, false));
         cbKeepAlive.setChecked(sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false));
         cbVolumeKeys.setChecked(sharedPreferences.getBoolean(KEY_VOLUME_KEYS, true));
 
@@ -1246,19 +1280,43 @@ public class MainActivity extends AppCompatActivity {
                         int clickDuration = Integer.parseInt(etClickDuration.getText().toString());
                         int longPressDuration = Integer.parseInt(etLongPressDuration.getText().toString());
                         int swipeDuration = Integer.parseInt(etSwipeDuration.getText().toString());
+                        int randomOffsetMin = parseIntSafe(etRandomOffsetMin.getText().toString());
+                        int randomOffsetMax = parseIntSafe(etRandomOffsetMax.getText().toString());
+                        int randomDelayMin = parseIntSafe(etRandomDelayMin.getText().toString());
+                        int randomDelayMax = parseIntSafe(etRandomDelayMax.getText().toString());
+                        int touchTraceAlpha = clampInt(parseIntSafe(etTouchTraceAlpha.getText().toString()), 0, 255);
                         int moveTolerancePx = parseIntSafe(etMoveTolerancePx.getText().toString());
                         int motionThreshold = parseIntSafe(etMotionThreshold.getText().toString());
                         int firstActionDelay = parseIntSafe(etFirstActionDelay.getText().toString());
                         boolean showDebug = cbShowDebug.isChecked();
+                        boolean showTouchTrace = cbShowTouchTrace.isChecked();
+                        String touchTraceColor = normalizeColorText(selectedTraceColor[0]);
                         String touchDevice = etTouchDevice.getText().toString().trim();
                         int maxX = parseIntSafe(etMaxX.getText().toString());
                         int maxY = parseIntSafe(etMaxY.getText().toString());
                         int coordinateRotationMode = spCoordinateRotation != null ? spCoordinateRotation.getSelectedItemPosition() : 0;
+                        if (randomOffsetMax < randomOffsetMin) {
+                            int tmp = randomOffsetMin;
+                            randomOffsetMin = randomOffsetMax;
+                            randomOffsetMax = tmp;
+                        }
+                        if (randomDelayMax < randomDelayMin) {
+                            int tmp = randomDelayMin;
+                            randomDelayMin = randomDelayMax;
+                            randomDelayMax = tmp;
+                        }
 
                         sharedPreferences.edit()
                                 .putInt(KEY_CLICK_DURATION, clickDuration)
                                 .putInt(KEY_LONG_PRESS_DURATION, longPressDuration)
                                 .putInt(KEY_SWIPE_DURATION, swipeDuration)
+                                .putInt(KEY_RANDOM_OFFSET_MIN, Math.max(0, randomOffsetMin))
+                                .putInt(KEY_RANDOM_OFFSET_MAX, Math.max(0, randomOffsetMax))
+                                .putInt(KEY_RANDOM_DELAY_MIN, Math.max(0, randomDelayMin))
+                                .putInt(KEY_RANDOM_DELAY_MAX, Math.max(0, randomDelayMax))
+                                .putBoolean(KEY_SHOW_TOUCH_TRACE, showTouchTrace)
+                                .putString(KEY_TOUCH_TRACE_COLOR, touchTraceColor)
+                                .putInt(KEY_TOUCH_TRACE_ALPHA, touchTraceAlpha)
                                 .putInt(KEY_MOVE_TOLERANCE_PX, moveTolerancePx)
                                 .putInt(KEY_MOTION_THRESHOLD, motionThreshold)
                                 .putInt(KEY_FIRST_ACTION_DELAY, firstActionDelay)
@@ -1434,6 +1492,121 @@ public class MainActivity extends AppCompatActivity {
         try { return Integer.parseInt(s.trim()); } catch (Exception e) { return 0; }
     }
 
+    private int clampInt(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private String normalizeColorText(String colorText) {
+        String value = colorText == null ? "" : colorText.trim();
+        if (!value.startsWith("#")) value = "#" + value;
+        try {
+            Color.parseColor(value);
+            return value;
+        } catch (Exception e) {
+            return "#FF4081";
+        }
+    }
+
+    private void updateColorButton(Button button, String colorText) {
+        if (button == null) return;
+        String normalized = normalizeColorText(colorText);
+        int color = Color.parseColor(normalized);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(color);
+        bg.setCornerRadius(dp(6));
+        bg.setStroke(Math.max(1, dp(1)), Color.parseColor("#666666"));
+        button.setBackground(bg);
+        button.setText(normalized);
+        button.setTextColor(isLightColor(color) ? Color.BLACK : Color.WHITE);
+    }
+
+    private boolean isLightColor(int color) {
+        int r = Color.red(color);
+        int g = Color.green(color);
+        int b = Color.blue(color);
+        return (r * 299 + g * 587 + b * 114) >= 186000;
+    }
+
+    private void showTraceColorPicker(String[] selectedColor, Button previewButton) {
+        final String[] colors = {
+                "#FF4081", "#F44336", "#FF9800", "#FFEB3B",
+                "#4CAF50", "#00BCD4", "#2196F3", "#3F51B5",
+                "#9C27B0", "#FFFFFF", "#9E9E9E", "#000000"
+        };
+        android.widget.GridLayout grid = new android.widget.GridLayout(this);
+        grid.setColumnCount(4);
+        int pad = dp(12);
+        grid.setPadding(pad, pad, pad, pad);
+        final AlertDialog[] dialogRef = new AlertDialog[1];
+        for (String color : colors) {
+            Button swatch = new Button(this);
+            swatch.setText("");
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(Color.parseColor(color));
+            bg.setCornerRadius(dp(6));
+            bg.setStroke(Math.max(1, dp(1)), Color.parseColor("#666666"));
+            swatch.setBackground(bg);
+            android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams();
+            lp.width = dp(56);
+            lp.height = dp(44);
+            lp.setMargins(dp(6), dp(6), dp(6), dp(6));
+            swatch.setLayoutParams(lp);
+            swatch.setOnClickListener(v -> {
+                selectedColor[0] = color;
+                updateColorButton(previewButton, color);
+                if (dialogRef[0] != null) dialogRef[0].dismiss();
+            });
+            grid.addView(swatch);
+        }
+        dialogRef[0] = new AlertDialog.Builder(this)
+                .setTitle("选择轨迹颜色")
+                .setView(grid)
+                .setNegativeButton("取消", null)
+                .create();
+        dialogRef[0].show();
+    }
+
+    private int[] randomizePoint(int x, int y, int offsetMin, int offsetMax, int[] screenSize, java.util.Random random) {
+        int rx = x + randomSignedInRange(random, offsetMin, offsetMax);
+        int ry = y + randomSignedInRange(random, offsetMin, offsetMax);
+        if (screenSize != null && screenSize[0] > 0 && screenSize[1] > 0) {
+            rx = clampInt(rx, 0, screenSize[0] - 1);
+            ry = clampInt(ry, 0, screenSize[1] - 1);
+        }
+        return new int[]{rx, ry};
+    }
+
+    private int randomSignedInRange(java.util.Random random, int min, int max) {
+        if (random == null || max <= 0) return 0;
+        int lo = Math.max(0, Math.min(min, max));
+        int hi = Math.max(lo, max);
+        int magnitude = lo + random.nextInt(hi - lo + 1);
+        return random.nextBoolean() ? magnitude : -magnitude;
+    }
+
+    private int[] getScreenSize() {
+        int w = 0, h = 0;
+        try {
+            WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+            if (wm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
+                    w = b.width();
+                    h = b.height();
+                } else {
+                    DisplayMetrics dm = new DisplayMetrics();
+                    android.view.Display d = wm.getDefaultDisplay();
+                    if (d != null) {
+                        d.getRealMetrics(dm);
+                        w = dm.widthPixels;
+                        h = dm.heightPixels;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return new int[]{w, h};
+    }
+
     private void startRecordingOverlay() {
         if (execOverlayActive) {
             Toast.makeText(this, "执行悬浮球已开启，请先在“执行”弹窗中关闭", Toast.LENGTH_SHORT).show();
@@ -1518,6 +1691,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void autoDetectTouchDeviceIfNeeded() {
+        String touchDevice = sharedPreferences.getString(KEY_TOUCH_DEVICE, "");
+        int maxX = sharedPreferences.getInt(KEY_MAX_X, 0);
+        int maxY = sharedPreferences.getInt(KEY_MAX_Y, 0);
+        if (!TextUtils.isEmpty(touchDevice) && maxX > 0 && maxY > 0) return;
+        new Thread(() -> {
+            AutoDetectResult result = detectTouchDevice();
+            if (result != null) {
+                sharedPreferences.edit()
+                        .putString(KEY_TOUCH_DEVICE, result.path)
+                        .putInt(KEY_MAX_X, result.maxX)
+                        .putInt(KEY_MAX_Y, result.maxY)
+                        .apply();
+                android.util.Log.i(TAG, "Auto detected touch device: " + result.path + " maxX=" + result.maxX + " maxY=" + result.maxY);
+            }
+        }, "auto_detect_touch_device").start();
+    }
+
     private void autoDetectTouchDevice(EditText etTouchDevice, EditText etMaxX, EditText etMaxY, TextView tvScreenPx) {
         new Thread(() -> {
             try {
@@ -1590,6 +1781,59 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "解析失败: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private AutoDetectResult detectTouchDevice() {
+        Process p = null;
+        java.io.BufferedReader br = null;
+        try {
+            p = Runtime.getRuntime().exec("su -c getevent -pl");
+            br = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+            String line;
+            String currentDevice = null;
+            String currentPath = null;
+            int foundMaxX = 0;
+            int foundMaxY = 0;
+            java.util.regex.Pattern maxPattern = java.util.regex.Pattern.compile("max\\s+(\\d+)");
+            while ((line = br.readLine()) != null) {
+                if (line.contains("add device") && line.contains("/dev/input/")) {
+                    int idx = line.indexOf("/dev/input/");
+                    if (idx >= 0) {
+                        currentPath = line.substring(idx).split(" ")[0].trim();
+                    }
+                    currentDevice = currentPath;
+                    foundMaxX = 0;
+                    foundMaxY = 0;
+                } else if (line.contains("ABS_MT_POSITION_X") || line.contains("ABS X")) {
+                    java.util.regex.Matcher m = maxPattern.matcher(line);
+                    if (m.find()) foundMaxX = Integer.parseInt(m.group(1));
+                } else if (line.contains("ABS_MT_POSITION_Y") || line.contains("ABS Y")) {
+                    java.util.regex.Matcher m = maxPattern.matcher(line);
+                    if (m.find()) foundMaxY = Integer.parseInt(m.group(1));
+                }
+                if (currentDevice != null && foundMaxX > 0 && foundMaxY > 0) {
+                    return new AutoDetectResult(currentDevice, foundMaxX, foundMaxY);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "detectTouchDevice failed", e);
+        } finally {
+            try { if (br != null) br.close(); } catch (Exception ignored) {}
+            try { if (p != null) p.destroy(); } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private static class AutoDetectResult {
+        final String path;
+        final int maxX;
+        final int maxY;
+
+        AutoDetectResult(String path, int maxX, int maxY) {
+            this.path = path;
+            this.maxX = maxX;
+            this.maxY = maxY;
+        }
     }
 
     private void checkRootPermission() {
