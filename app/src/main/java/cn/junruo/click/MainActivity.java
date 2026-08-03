@@ -92,6 +92,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SHOW_TOUCH_TRACE = "show_touch_trace";
     private static final String KEY_TOUCH_TRACE_COLOR = "touch_trace_color";
     private static final String KEY_TOUCH_TRACE_ALPHA = "touch_trace_alpha";
+    private static final String KEY_SETTINGS_SCHEMA_VERSION = "settings_schema_version";
+    private static final int SETTINGS_SCHEMA_TRACE_DEFAULT_OFF = 1;
     private static final String KEY_PERMISSIONS_DIALOG_SHOWN = "permissions_dialog_shown";
     private static final String KEY_ROOT_GRANTED = "root_granted";
     public static final String ACTION_RECORDING_COMPLETE = "cn.junruo.click.RECORDING_COMPLETE";
@@ -136,6 +138,7 @@ public class MainActivity extends AppCompatActivity {
 
         // 初始化SharedPreferences
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        applyPreferenceMigrations();
         execOverlayActive = RecordService.isExecutionOverlayActive();
         recordOverlayActive = RecordService.isRecordingOverlayActive();
         sharedPreferences.edit()
@@ -187,6 +190,16 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
             }
+        }
+    }
+
+    private void applyPreferenceMigrations() {
+        int schemaVersion = sharedPreferences.getInt(KEY_SETTINGS_SCHEMA_VERSION, 0);
+        if (schemaVersion < SETTINGS_SCHEMA_TRACE_DEFAULT_OFF) {
+            sharedPreferences.edit()
+                    .putBoolean(KEY_SHOW_TOUCH_TRACE, false)
+                    .putInt(KEY_SETTINGS_SCHEMA_VERSION, SETTINGS_SCHEMA_TRACE_DEFAULT_OFF)
+                    .apply();
         }
     }
 
@@ -994,6 +1007,7 @@ public class MainActivity extends AppCompatActivity {
         EditText etRandomDelayMax = dialogView.findViewById(R.id.et_random_delay_max);
         MaterialButton btnTouchTraceColor = dialogView.findViewById(R.id.btn_touch_trace_color);
         EditText etTouchTraceAlpha = dialogView.findViewById(R.id.et_touch_trace_alpha);
+        View layoutTouchTraceOptions = dialogView.findViewById(R.id.layout_touch_trace_options);
         EditText etMoveTolerancePx = dialogView.findViewById(R.id.et_move_tolerance_px);
         EditText etMotionThreshold = dialogView.findViewById(R.id.et_motion_threshold);
         EditText etFirstActionDelay = dialogView.findViewById(R.id.et_first_action_delay);
@@ -1040,10 +1054,21 @@ public class MainActivity extends AppCompatActivity {
                 : "高速模式未开启（默认）。");
         btnRawInputTest.setOnClickListener(v -> testRawInputMode(
                 etTouchDevice, etMaxX, etMaxY, tvRawInputStatus, btnRawInputTest));
+        final boolean[] suppressRawInputWarning = {false};
         cbRawInputEnabled.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (suppressRawInputWarning[0]) return;
             if (isChecked) {
-                tvRawInputStatus.setText("正在自动识别并自检...");
-                btnRawInputTest.performClick();
+                suppressRawInputWarning[0] = true;
+                buttonView.setChecked(false);
+                suppressRawInputWarning[0] = false;
+                tvRawInputStatus.setText("高速模式未开启（默认）。");
+                showExperimentalHighSpeedWarning(() -> {
+                    suppressRawInputWarning[0] = true;
+                    cbRawInputEnabled.setChecked(true);
+                    suppressRawInputWarning[0] = false;
+                    tvRawInputStatus.setText("正在自动识别并自检...");
+                    btnRawInputTest.performClick();
+                });
             } else {
                 tvRawInputStatus.setText("高速模式未开启（默认）。");
             }
@@ -1069,6 +1094,31 @@ public class MainActivity extends AppCompatActivity {
         cbFallbackNoXY.setChecked(sharedPreferences.getBoolean(KEY_FALLBACK_NO_XY, true));
         cbShowDebug.setChecked(sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false));
         cbShowTouchTrace.setChecked(sharedPreferences.getBoolean(KEY_SHOW_TOUCH_TRACE, false));
+        Runnable updateTouchTraceUi = () -> {
+            boolean enabled = cbShowTouchTrace.isChecked();
+            btnTouchTraceColor.setEnabled(enabled);
+            etTouchTraceAlpha.setEnabled(enabled);
+            layoutTouchTraceOptions.setAlpha(enabled ? 1f : 0.45f);
+        };
+        final boolean[] suppressTouchTraceWarning = {false};
+        cbShowTouchTrace.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (suppressTouchTraceWarning[0]) return;
+            if (!isChecked) {
+                updateTouchTraceUi.run();
+                return;
+            }
+            suppressTouchTraceWarning[0] = true;
+            buttonView.setChecked(false);
+            suppressTouchTraceWarning[0] = false;
+            updateTouchTraceUi.run();
+            showTouchTraceWarning(() -> {
+                suppressTouchTraceWarning[0] = true;
+                cbShowTouchTrace.setChecked(true);
+                suppressTouchTraceWarning[0] = false;
+                updateTouchTraceUi.run();
+            });
+        });
+        updateTouchTraceUi.run();
         cbKeepAlive.setChecked(sharedPreferences.getBoolean(KEY_KEEP_ALIVE, false));
         cbVolumeKeys.setChecked(sharedPreferences.getBoolean(KEY_VOLUME_KEYS, true));
 
@@ -1629,6 +1679,26 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> testButton.setEnabled(true));
             }
         }, "raw_input_self_test").start();
+    }
+
+    private void showExperimentalHighSpeedWarning(Runnable onConfirm) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.raw_input_warning_title)
+                .setMessage(R.string.raw_input_warning_message)
+                .setPositiveButton(R.string.raw_input_warning_confirm,
+                        (dialog, which) -> onConfirm.run())
+                .setNegativeButton(R.string.raw_input_warning_cancel, null)
+                .show();
+    }
+
+    private void showTouchTraceWarning(Runnable onConfirm) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.touch_trace_warning_title)
+                .setMessage(R.string.touch_trace_warning_message)
+                .setPositiveButton(R.string.touch_trace_warning_confirm,
+                        (dialog, which) -> onConfirm.run())
+                .setNegativeButton(R.string.touch_trace_warning_cancel, null)
+                .show();
     }
 
     private void autoDetectTouchDevice(EditText etTouchDevice, EditText etMaxX, EditText etMaxY, TextView tvScreenPx) {

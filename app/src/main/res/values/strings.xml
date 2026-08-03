@@ -1,10 +1,19 @@
 <resources>
     <string name="app_name">自动模拟助手</string>
-    <string name="version_format">v%1$s · 君若</string>
+    <string name="version_format">v%1$s · 君若（酷安）</string>
     <string name="countdown_seconds">%1$d 秒</string>
     <string name="screen_size_format">%1$d × %2$d px</string>
     <string name="raw_input_test_success">自检通过：%1$s</string>
     <string name="raw_input_test_failed">自检失败：%1$s；执行时将自动回退标准模式。</string>
+    <string name="raw_input_warning_title">开启实验性高速模式？</string>
+    <string name="raw_input_warning_message">优点：\n• 直接注入触摸设备，延迟更低，适合高频快速点击。\n• 执行前自动识别设备并自检，失败时会释放触摸并回退标准模式。\n\n缺点：\n• 需要 Root，并依赖设备触摸驱动及 ROM 的兼容性。\n• 仅加速“快速点击”，自定义按压、长按和滑动仍使用标准模式。\n• 少数设备仍可能出现点击无效、坐标异常或触摸状态异常。\n\n同时显示点击轨迹会增加绘制开销。追求极速点击时请关闭点击轨迹。</string>
+    <string name="raw_input_warning_confirm">继续开启并自检</string>
+    <string name="raw_input_warning_cancel">保持关闭</string>
+    <string name="touch_trace_setting_hint">会额外绘制点击位置，可能影响高频点击表现；追求极速点击建议关闭。</string>
+    <string name="touch_trace_warning_title">开启点击轨迹？</string>
+    <string name="touch_trace_warning_message">点击轨迹会在屏幕上额外绘制标记，可能增加绘制和窗口调度开销，导致实际点击变慢、间隔抖动或偶发漏点。\n\n需要观察点击位置时可以开启；追求极速点击时建议保持关闭。</string>
+    <string name="touch_trace_warning_confirm">仍然开启</string>
+    <string name="touch_trace_warning_cancel">保持关闭</string>
     <string name="root_status_ready">Root 权限已就绪</string>
     <string name="root_status_missing">Root 权限未获取，点击授权</string>
 </resources>

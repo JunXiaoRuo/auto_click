@@ -239,9 +239,16 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="显示点击轨迹" />
+            android:text="显示点击轨迹（默认关闭）" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/touch_trace_setting_hint"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
 
         <LinearLayout
+            android:id="@+id/layout_touch_trace_options"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
