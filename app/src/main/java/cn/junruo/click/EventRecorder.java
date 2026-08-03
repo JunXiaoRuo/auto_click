@@ -7,6 +7,7 @@ import android.view.WindowManager;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Locale;
 
 class EventRecorder {
     private static final int ROTATION_MODE_AUTO = 0;
@@ -319,7 +320,7 @@ class EventRecorder {
                     }
                 } else if (line.contains("EV_ABS") && line.contains("ABS_MT_TRACKING_ID")) {
                     int v = parseHexOrDecValue(line);
-                    boolean isEnd = line.toLowerCase().contains("ffffffff") || v == 0xFFFFFFFF;
+                    boolean isEnd = line.toLowerCase(Locale.ROOT).contains("ffffffff") || v == 0xFFFFFFFF;
                     if (!isEnd && !touching) {
                         touching = true;
                         startX = -1;

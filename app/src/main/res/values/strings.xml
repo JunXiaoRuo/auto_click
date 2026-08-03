@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">自动模拟助手</string>
+    <string name="version_format">v%1$s · 君若</string>
+    <string name="countdown_seconds">%1$d 秒</string>
+    <string name="screen_size_format">%1$d × %2$d px</string>
+    <string name="raw_input_test_success">自检通过：%1$s</string>
+    <string name="raw_input_test_failed">自检失败：%1$s；执行时将自动回退标准模式。</string>
+    <string name="root_status_ready">Root 权限已就绪</string>
+    <string name="root_status_missing">Root 权限未获取，点击授权</string>
 </resources>

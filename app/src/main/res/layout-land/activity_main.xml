@@ -1,0 +1,366 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/app_background"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@color/app_surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="8dp">
+
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:contentDescription="应用图标"
+            android:scaleType="centerCrop"
+            android:src="@mipmap/ic_launcher" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="@string/app_name"
+                android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
+
+            <TextView
+                android:id="@+id/tv_version"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="正在读取版本"
+                android:textAppearance="@style/TextAppearance.Click.Caption" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_root_status"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_status_error"
+            android:clickable="true"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:maxWidth="190dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="正在检查 Root 状态"
+            android:textAppearance="@style/TextAppearance.Click.Caption"
+            android:textColor="@color/app_error"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_permissions"
+            style="@style/Widget.Click.Button.Icon"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:contentDescription="权限状态"
+            app:icon="@drawable/ic_security_24"
+            app:iconTint="@color/app_text_secondary" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="方案"
+                    android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
+
+                <Spinner
+                    android:id="@+id/sp_scheme_selector"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/app_outline"
+                    android:popupBackground="@color/app_surface" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_new_scheme"
+                    style="@style/Widget.Click.Button.Icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="新建方案"
+                    app:icon="@drawable/ic_add_24"
+                    app:iconTint="@color/app_text_secondary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_save_scheme"
+                    style="@style/Widget.Click.Button.Icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="保存方案"
+                    app:icon="@drawable/ic_save_24"
+                    app:iconTint="@color/app_text_secondary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_delete_scheme"
+                    style="@style/Widget.Click.Button.Icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="删除方案"
+                    app:icon="@drawable/ic_delete_24"
+                    app:iconTint="@color/app_error" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="目标应用"
+                android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Click.TextInputLayout"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="未选择则不跳转">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_app_activity"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:cursorVisible="false"
+                        android:focusable="false"
+                        android:inputType="none"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_select_app"
+                    style="@style/Widget.Click.Button.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:text="选择"
+                    app:icon="@drawable/ic_apps_24"
+                    app:iconTint="@color/app_primary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_clear_app"
+                    style="@style/Widget.Click.Button.Icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="2dp"
+                    android:contentDescription="清除目标或步骤"
+                    app:icon="@drawable/ic_close_24"
+                    app:iconTint="@color/app_text_secondary" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/layout_completion_actions"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="完成后停止应用"
+                        android:textAppearance="@style/TextAppearance.Click.Body"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="结束选中的目标进程"
+                        android:textAppearance="@style/TextAppearance.Click.Caption" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_select_apps_to_stop"
+                    style="@style/Widget.Click.Button.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="选择应用" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/sw_stop_apps_enabled"
+                    style="@style/Widget.Click.Switch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:background="@color/app_outline" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1.15"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="操作步骤"
+                    android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
+
+                <TextView
+                    android:id="@+id/tv_operation_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 个步骤"
+                    android:textAppearance="@style/TextAppearance.Click.Caption" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_add_operation"
+                    style="@style/Widget.Click.Button.Secondary"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="添加步骤"
+                    app:icon="@drawable/ic_add_24"
+                    app:iconTint="@color/app_primary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_start_recording"
+                    style="@style/Widget.Click.Button.Secondary"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="录制动作"
+                    app:icon="@drawable/ic_record_24"
+                    app:iconTint="@color/app_error" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="6dp"
+                android:layout_weight="1"
+                android:background="@color/app_surface">
+
+                <ListView
+                    android:id="@+id/lv_operations"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:divider="@color/app_outline"
+                    android:dividerHeight="1dp"
+                    android:listSelector="@drawable/bg_list_item"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp" />
+
+                <TextView
+                    android:id="@+id/tv_empty_operations"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:text="还没有操作步骤\n可以手动添加或开始录制"
+                    android:textAlignment="center"
+                    android:textAppearance="@style/TextAppearance.Click.Caption" />
+            </FrameLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@color/app_surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_execute"
+            style="@style/Widget.Click.Button.Primary"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:text="执行"
+            app:icon="@drawable/ic_play_24"
+            app:iconTint="@color/app_on_primary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_settings"
+            style="@style/Widget.Click.Button.Secondary"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:text="设置"
+            app:icon="@drawable/ic_settings_24"
+            app:iconTint="@color/app_primary" />
+    </LinearLayout>
+</LinearLayout>

@@ -5,6 +5,10 @@
         <item>长按操作</item>
         <item>滑动操作</item>
     </string-array>
+    <string-array name="click_modes">
+        <item>快速点击（推荐）</item>
+        <item>自定义按压</item>
+    </string-array>
     <string-array name="coordinate_rotation_modes">
         <item>自动修正</item>
         <item>关闭修正</item>

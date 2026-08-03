@@ -10,8 +10,8 @@ android {
         applicationId "cn.junruo.click"
         minSdk 22
         targetSdk 35
-        versionCode 7
-        versionName '2.2'
+        versionCode 8
+        versionName '2.3'
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -25,6 +25,9 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures {
+        buildConfig true
     }
 }
 

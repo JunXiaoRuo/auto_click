@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:fillViewport="true">
@@ -8,467 +9,383 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="24dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="12dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <CheckBox
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="服务与控制"
+            android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
+
+        <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/cb_keep_alive"
-            android:layout_width="wrap_content"
+            style="@style/Widget.Click.CheckBox"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="服务保活(常驻通知)"/>
-    </LinearLayout>
+            android:layout_marginTop="6dp"
+            android:text="服务保活（显示常驻通知）" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="常规设置"
-        android:textStyle="bold"
-        android:layout_marginTop="12dp"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <CheckBox
+        <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/cb_volume_keys"
-            android:layout_width="wrap_content"
+            style="@style/Widget.Click.CheckBox"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="音量加/减控制录制与执行"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+            android:text="音量加/减控制录制与执行" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="点击持续时间(ms):"/>
-
-        <EditText
-            android:id="@+id/et_click_duration"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="50-1000"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="16dp">
+            android:layout_marginTop="18dp"
+            android:text="点击执行"
+            android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="长按持续时间(ms):"/>
-
-        <EditText
-            android:id="@+id/et_long_press_duration"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="300-2000"/>
-    </LinearLayout>
-
-
-
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp"
-        android:visibility="gone">
-
-        <CheckBox
-            android:id="@+id/cb_fallback_no_xy"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="无坐标长按回退(用上次坐标)"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="坐标旋转修正:"/>
+            android:layout_marginTop="8dp"
+            android:text="普通点击模式"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
 
         <Spinner
-            android:id="@+id/sp_coordinate_rotation"
-            android:layout_width="0dp"
+            android:id="@+id/sp_click_mode"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:entries="@array/click_modes"
+            android:popupBackground="@color/app_surface" />
+
+        <TextView
+            android:id="@+id/tv_click_mode_description"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:entries="@array/coordinate_rotation_modes"/>
-    </LinearLayout>
+            android:layout_marginTop="2dp"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
 
-    
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_click_duration"
+            style="@style/Widget.Click.TextInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="自定义按压持续时间 (ms)">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="16dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_click_duration"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cb_raw_input_enabled"
+            style="@style/Widget.Click.CheckBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="实验性高速模式（默认关闭）" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="直接写入触摸设备，仅加速“快速点击”。执行前自动识别并进行无点击自检；异常时强制松开并回退标准模式。"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_raw_input_test"
+            style="@style/Widget.Click.Button.Secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="自动识别并自检" />
+
+        <TextView
+            android:id="@+id/tv_raw_input_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="高速模式未开启"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="长按时长 (ms)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_long_press_duration"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:hint="滑动时长 (ms)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_swipe_duration"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cb_fallback_no_xy"
+            style="@style/Widget.Click.CheckBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="无坐标长按回退到上次坐标"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="滑动持续时间(ms):"/>
-
-        <EditText
-            android:id="@+id/et_swipe_duration"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="100-2000"/>
-    </LinearLayout>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="执行随机化"
-        android:textStyle="bold"
-        android:layout_marginTop="16dp"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+            android:layout_marginTop="18dp"
+            android:text="随机与轨迹"
+            android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="随机坐标偏移(px):"/>
+            android:layout_marginTop="4dp"
+            android:text="每个动作都会在所设范围内重新随机取值。"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
 
-        <EditText
-            android:id="@+id/et_random_offset_min"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="0"/>
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="wrap_content"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="最小偏移 (px)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_random_offset_min"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:hint="最大偏移 (px)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_random_offset_max"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:text="-"/>
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
 
-        <EditText
-            android:id="@+id/et_random_offset_max"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="6dp"
-            android:inputType="number"
-            android:hint="5"/>
-    </LinearLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="最小浮动 (ms)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_random_delay_min"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:hint="最大浮动 (ms)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_random_delay_max"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="随机延迟浮动(ms):"/>
-
-        <EditText
-            android:id="@+id/et_random_delay_min"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="0"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:text="-"/>
-
-        <EditText
-            android:id="@+id/et_random_delay_max"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="6dp"
-            android:inputType="number"
-            android:hint="50"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-
-        <CheckBox
+        <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/cb_show_touch_trace"
-            android:layout_width="wrap_content"
+            style="@style/Widget.Click.CheckBox"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="显示点击轨迹"/>
-    </LinearLayout>
+            android:layout_marginTop="8dp"
+            android:text="显示点击轨迹" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_touch_trace_color"
+                style="@style/Widget.Click.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="#FF4081" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:hint="透明度 (0-255)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_touch_trace_alpha"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="轨迹颜色:"/>
+            android:layout_marginTop="18dp"
+            android:text="录制与设备"
+            android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
 
-        <Button
-            android:id="@+id/btn_touch_trace_color"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="#FF4081"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="透明度:"/>
-
-        <EditText
-            android:id="@+id/et_touch_trace_alpha"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="160"/>
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#929292"
-        android:layout_marginTop="16dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="录制设置"
-        android:textStyle="bold"
-        android:layout_marginTop="12dp"/>
-
-    <Button
-        android:id="@+id/btn_auto_detect_device"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="自动解析(getevent -pl)并填入"
-        android:layout_marginTop="8dp"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="屏幕尺寸(px):"/>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_auto_detect_device"
+            style="@style/Widget.Click.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="自动解析触摸设备" />
 
         <TextView
             android:id="@+id/tv_screen_px"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="-"/>
-    </LinearLayout>
+            android:layout_marginTop="4dp"
+            android:text="屏幕尺寸：-"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Click.TextInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="触摸设备路径">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_touch_device"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="text" android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:hint="驱动最大 X">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_max_x" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_marginStart="10dp" android:layout_weight="1" android:hint="驱动最大 Y">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_max_y" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="触摸设备:"/>
+            android:layout_marginTop="10dp"
+            android:text="坐标旋转修正"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
 
-        <EditText
-            android:id="@+id/et_touch_device"
-            android:layout_width="0dp"
+        <Spinner
+            android:id="@+id/sp_coordinate_rotation"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:entries="@array/coordinate_rotation_modes"
+            android:popupBackground="@color/app_surface" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:hint="/dev/input/eventX"
-            android:inputType="text"/>
-    </LinearLayout>
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:hint="点击偏移 (px)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_move_tolerance_px" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_marginStart="10dp" android:layout_weight="1" android:hint="滑动阈值">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_motion_threshold" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Click.TextInputLayout"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="驱动最大X:"/>
+            android:layout_marginTop="10dp"
+            android:hint="录制后首动作延迟 (ms)">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_first_action_delay"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="number" android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <EditText
-            android:id="@+id/et_max_x"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:hint="例如1080"
-            android:inputType="number"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="驱动最大Y:"/>
-
-        <EditText
-            android:id="@+id/et_max_y"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:hint="例如2400"
-            android:inputType="number"/>
-    </LinearLayout>
-
-    
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="点击/长按允许偏移(px):"/>
-
-        <EditText
-            android:id="@+id/et_move_tolerance_px"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="例如20"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="滑动采样阈值(次):"/>
-
-        <EditText
-            android:id="@+id/et_motion_threshold"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="例如2"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="12dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="录制后首动作延时(ms):"/>
-
-        <EditText
-            android:id="@+id/et_first_action_delay"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:inputType="number"
-            android:hint="例如2000"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-
-        <CheckBox
+        <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/cb_show_debug"
-            android:layout_width="wrap_content"
+            style="@style/Widget.Click.CheckBox"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="显示录制调试信息"/>
-    </LinearLayout>
-
-    
-
+            android:layout_marginTop="4dp"
+            android:text="显示录制调试信息" />
     </LinearLayout>
 </ScrollView>

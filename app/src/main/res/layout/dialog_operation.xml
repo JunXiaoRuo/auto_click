@@ -2,151 +2,144 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="8dp">
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="8dp">
 
-        <!-- 操作类型选择 -->
-        <LinearLayout
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="操作类型"
+            android:textAppearance="@style/TextAppearance.Click.Caption" />
+
+        <Spinner
+            android:id="@+id/sp_type"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:entries="@array/operation_types"
+            android:popupBackground="@color/app_surface" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Click.TextInputLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_marginTop="12dp"
+            android:hint="执行前延迟 (ms)">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="操作类型:"/>
-
-            <Spinner
-                android:id="@+id/sp_type"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:entries="@array/operation_types"/>
-        </LinearLayout>
-
-        <!-- 延迟设置 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="16dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="延迟(ms):"/>
-
-            <EditText
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_delay"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
                 android:inputType="number"
-                android:hint="必填"/>
-        </LinearLayout>
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 点击/起始坐标 -->
         <TextView
             android:id="@+id/tv_start_point"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="点击坐标:"
-            android:layout_marginTop="16dp"/>
+            android:layout_marginTop="14dp"
+            android:text="点击坐标"
+            android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="X:"/>
-
-            <EditText
-                android:id="@+id/et_x1"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:inputType="number"
-                android:hint="必填"/>
+                android:hint="X">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Y:"
-                android:layout_marginStart="8dp"/>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_x1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberSigned"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <EditText
-                android:id="@+id/et_y1"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
                 android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:inputType="number"
-                android:hint="必填"/>
+                android:hint="Y">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_y1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberSigned"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
 
-        <!-- 终点坐标标题 -->
         <LinearLayout
             android:id="@+id/layout_end_point"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
             android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginTop="16dp">
+            android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="终点坐标:"/>
+                android:text="终点坐标"
+                android:textAppearance="@style/TextAppearance.Click.SectionTitle" />
         </LinearLayout>
 
-        <!-- 终点坐标输入 -->
         <LinearLayout
             android:id="@+id/layout_xy2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal"
             android:visibility="gone">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="X:"/>
-
-            <EditText
-                android:id="@+id/et_x2"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:inputType="number"
-                android:hint="必填"/>
+                android:hint="X">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Y:"
-                android:layout_marginStart="8dp"/>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_x2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberSigned"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <EditText
-                android:id="@+id/et_y2"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Click.TextInputLayout"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
                 android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:inputType="number"
-                android:hint="必填"/>
+                android:hint="Y">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_y2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberSigned"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

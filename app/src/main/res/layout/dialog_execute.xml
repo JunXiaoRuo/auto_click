@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="24dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="启动时自动执行" android:textAppearance="@style/TextAppearance.Click.Body" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="打开软件后自动运行当前方案" android:textAppearance="@style/TextAppearance.Click.Caption" />
+        </LinearLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_auto_click"
+            style="@style/Widget.Click.Switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/app_outline" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:orientation="horizontal">
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="悬浮球执行" android:textAppearance="@style/TextAppearance.Click.Body" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="跨应用开始或停止当前方案" android:textAppearance="@style/TextAppearance.Click.Caption" />
+        </LinearLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_exec_overlay"
+            style="@style/Widget.Click.Switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.Click.TextInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="循环次数">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_loop_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.checkbox.MaterialCheckBox
+        android:id="@+id/cb_loop_forever"
+        style="@style/Widget.Click.CheckBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="持续循环，直到手动停止" />
+
+    <com.google.android.material.checkbox.MaterialCheckBox
+        android:id="@+id/cb_loop_notify"
+        style="@style/Widget.Click.CheckBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="每轮结束后提示" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="循环之间的等待时间由第一个动作的延迟决定。"
+        android:textAppearance="@style/TextAppearance.Click.Caption" />
+</LinearLayout>

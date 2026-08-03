@@ -1,20 +1,20 @@
 package cn.junruo.click;
 
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.app.NotificationManager;
-import android.Manifest;
 import androidx.core.app.ActivityCompat;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -34,17 +34,21 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
-import java.io.DataOutputStream;
+import androidx.appcompat.widget.TooltipCompat;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -55,7 +59,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_AUTO_CLICK = "auto_click";
     private static final String KEY_SCHEMES = "schemes";
     private static final String KEY_CURRENT_SCHEME = "current_scheme";
+    private static final String KEY_CLICK_MODE = "click_mode";
     private static final String KEY_CLICK_DURATION = "click_duration";
+    private static final String KEY_RAW_INPUT_ENABLED = "raw_input_enabled";
     private static final String KEY_LONG_PRESS_DURATION = "long_press_duration";
     private static final String KEY_SWIPE_DURATION = "swipe_duration";
     private static final String KEY_FALLBACK_NO_XY = "fallback_no_xy";
@@ -64,6 +70,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int DEFAULT_CLICK_DURATION = 50;// 默认点击持续时间
     private static final int DEFAULT_LONG_PRESS_DURATION = 500;// 默认长按持续时间
     private static final int DEFAULT_SWIPE_DURATION = 100;// 默认滑动持续时间
+    private static final int CLICK_MODE_FAST = 0;
+    private static final int CLICK_MODE_CUSTOM_PRESS = 1;
     private static final String KEY_TOUCH_DEVICE = "touch_device";
     private static final String KEY_MAX_X = "max_x";
     private static final String KEY_MAX_Y = "max_y";
@@ -76,7 +84,6 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_VOLUME_KEYS = "volume_keys_control";
     private static final String KEY_EXEC_LOOP_COUNT = "exec_loop_count";
     private static final String KEY_EXEC_LOOP_FOREVER = "exec_loop_forever";
-    private static final String KEY_EXEC_LOOP_INTERVAL_MS = "exec_loop_interval_ms";
     private static final String KEY_EXEC_LOOP_NOTIFY = "exec_loop_notify";
     private static final String KEY_RANDOM_OFFSET_MIN = "random_offset_min";
     private static final String KEY_RANDOM_OFFSET_MAX = "random_offset_max";
@@ -91,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
 
     // UI 组件
     private EditText etAppActivity;// 显示/输入目标应用名
-    private Switch swAutoClick;// 是否启用自动执行
     private Button btnExecute;
     private Button btnSelectApp;
     private Button btnClearApp;
@@ -99,7 +105,8 @@ public class MainActivity extends AppCompatActivity {
     private ListView lvOperations;// 操作步骤列表
     private Button btnSettings;
     private TextView tvRootStatus;
-    private Switch swStopAppsEnabled;
+    private TextView tvOperationCount;
+    private MaterialSwitch swStopAppsEnabled;
     private Button btnSelectAppsToStop;
     private Spinner spSchemeSelector;
     private Button btnNewScheme;
@@ -107,7 +114,6 @@ public class MainActivity extends AppCompatActivity {
     private Button btnDeleteScheme;
     private Button btnStartRecording;
 
-    private final Handler handler = new Handler();
     private SharedPreferences sharedPreferences;
     private ArrayList<Operation> operations = new ArrayList<>();// 当前方案的操作步骤
     private OperationAdapter operationAdapter;
@@ -120,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private AlertDialog permissionsDialog;
     private boolean execOverlayActive = false;
+    private boolean recordOverlayActive = false;
 
     // 修改onCreate方法中的初始化顺序
     @Override
@@ -127,15 +134,14 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // 设置状态栏样式
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getWindow().setStatusBarColor(getResources().getColor(R.color.white));
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-        }
-
         // 初始化SharedPreferences
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        try { sharedPreferences.edit().putBoolean("exec_overlay_active", false).apply(); } catch (Exception ignored) {}
+        execOverlayActive = RecordService.isExecutionOverlayActive();
+        recordOverlayActive = RecordService.isRecordingOverlayActive();
+        sharedPreferences.edit()
+                .putBoolean("exec_overlay_active", execOverlayActive)
+                .putBoolean("record_overlay_active", recordOverlayActive)
+                .apply();
 
         // 初始化UI、权限与数据
         initViews();// 初始化控件与事件
@@ -143,6 +149,7 @@ public class MainActivity extends AppCompatActivity {
 
         hasRootPermission = sharedPreferences.getBoolean(KEY_ROOT_GRANTED, false);
         updateRootStatusUI();
+        checkRootPermission();
 
 
         loadSchemes();// 加载已有的所有方案
@@ -175,7 +182,11 @@ public class MainActivity extends AppCompatActivity {
 
         boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
         if (autoClickEnabled) {
-            showAutoStartCountdown();
+            if (isConfigValid()) {
+                showAutoStartCountdown();
+            } else {
+                sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
+            }
         }
     }
 
@@ -190,17 +201,30 @@ public class MainActivity extends AppCompatActivity {
         lvOperations = findViewById(R.id.lv_operations);
         btnSettings = findViewById(R.id.btn_settings);
         tvRootStatus = findViewById(R.id.tv_root_status);
+        tvOperationCount = findViewById(R.id.tv_operation_count);
+        TextView tvVersion = findViewById(R.id.tv_version);
+        TextView tvEmptyOperations = findViewById(R.id.tv_empty_operations);
         Button btnPermissions = findViewById(R.id.btn_permissions);
+
+        tvVersion.setText(getString(R.string.version_format, BuildConfig.VERSION_NAME));
 
         // 设置适配器
         operationAdapter = new OperationAdapter(this, operations);
         lvOperations.setAdapter(operationAdapter);
+        lvOperations.setEmptyView(tvEmptyOperations);
+        updateOperationCount();
 
         // 方案管理视图初始化
         spSchemeSelector = findViewById(R.id.sp_scheme_selector);
         btnNewScheme = findViewById(R.id.btn_new_scheme);
         btnSaveScheme = findViewById(R.id.btn_save_scheme);
         btnDeleteScheme = findViewById(R.id.btn_delete_scheme);
+
+        TooltipCompat.setTooltipText(btnPermissions, "权限状态");
+        TooltipCompat.setTooltipText(btnNewScheme, "新建方案");
+        TooltipCompat.setTooltipText(btnSaveScheme, "保存方案");
+        TooltipCompat.setTooltipText(btnDeleteScheme, "删除方案");
+        TooltipCompat.setTooltipText(btnClearApp, "清除目标或步骤");
 
         // 执行完成操作区域初始化
         LinearLayout layoutCompletionActions = findViewById(R.id.layout_completion_actions);
@@ -222,7 +246,7 @@ public class MainActivity extends AppCompatActivity {
         if (btnClearApp != null) {
             btnClearApp.setOnClickListener(v -> {
                 String[] options = new String[]{"清除目标应用", "清除步骤", "全部清除"};
-                new AlertDialog.Builder(this)
+                new MaterialAlertDialogBuilder(this)
                         .setTitle("选择清除内容")
                         .setItems(options, (d, which) -> {
                             if (currentScheme == null) {
@@ -248,12 +272,11 @@ public class MainActivity extends AppCompatActivity {
                             if (clearOps) {
                                 operations.clear();
                                 operationAdapter.notifyDataSetChanged();
+                                updateOperationCount();
                                 sharedPreferences.edit()
                                         .putString(KEY_OPERATIONS, Operation.toJsonArray(operations))
+                                        .putBoolean(KEY_AUTO_CLICK, false)
                                         .apply();
-                                if (swAutoClick != null && swAutoClick.isChecked()) {
-                                    swAutoClick.setChecked(false);
-                                }
                             }
                             saveCurrentScheme();
                             String tip = which == 0 ? "已清除目标应用并保存" : which == 1 ? "已清除步骤并保存" : "已清除目标应用与步骤并保存";
@@ -301,6 +324,8 @@ public class MainActivity extends AppCompatActivity {
             Operation op = operations.get(position);
             showOperationDialog(op);
         });
+
+        updateStopAppsButtonText();
     }
 
     private void saveCurrentSchemeWithToast() {
@@ -312,80 +337,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //自动点击开关监听逻辑
-    private void setupAutoClickSwitchListener() {
-        if (swAutoClick == null) return;
-
-        swAutoClick.setOnCheckedChangeListener(null);// 移除旧监听
-
-        // 创建监听器实例
-        CompoundButton.OnCheckedChangeListener autoClickListener = new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
-                if (isChecked) {
-                    if (isConfigValid()) {
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                                boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
-                                if (!ignoring) {
-                                    new AlertDialog.Builder(MainActivity.this)
-                                            .setTitle("建议关闭电池优化")
-                                            .setMessage("为保证跨应用执行流程稳定，请将本应用设为不受电池优化限制。小米设备请设置为‘无限制’。")
-                                            .setPositiveButton("去设置", (d, w) -> {
-                                                try {
-                                                    if (android.os.Build.MANUFACTURER != null && android.os.Build.MANUFACTURER.toLowerCase().contains("xiaomi")) {
-                                                        Intent miui = new Intent();
-                                                        miui.setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
-                                                        miui.putExtra("package_name", getPackageName());
-                                                        miui.putExtra("package_label", getApplicationInfo().loadLabel(getPackageManager()).toString());
-                                                        startActivity(miui);
-                                                    } else {
-                                                        Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                                                        i.setData(Uri.parse("package:" + getPackageName()));
-                                                        startActivity(i);
-                                                    }
-                                                } catch (Exception e1) {
-                                                    try {
-                                                        Intent i2 = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                                                        startActivity(i2);
-                                                    } catch (Exception ignored) {}
-                                                }
-                                            })
-                                            .setNegativeButton("暂不", null)
-                                            .show();
-                                }
-                            }
-                        } catch (Exception ignored) {}
-                        showAutoStartCountdown();// 显示3秒倒计时
-                    } else {
-                        // 临时移除监听器避免递归
-                        swAutoClick.setOnCheckedChangeListener(null);
-                        swAutoClick.setChecked(false);
-                        swAutoClick.setOnCheckedChangeListener(this);
-                        Toast.makeText(MainActivity.this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
-                    }
-                }
-            }
-        };
-
-        // 设置监听器
-        swAutoClick.setOnCheckedChangeListener(autoClickListener);
-
-        // 处理启动时的自动执行状态
-        boolean autoClickEnabled = sharedPreferences.getBoolean(KEY_AUTO_CLICK, false);
-        swAutoClick.setChecked(autoClickEnabled);
-
-        // 不需要在这里再次调用showAutoStartCountdown()，因为设置checked会触发监听器
-        if (autoClickEnabled && !isConfigValid()) {
-            // 配置无效时关闭自动执行
-            sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
-            swAutoClick.setChecked(false);
-            Toast.makeText(this, "自动执行已关闭：请先添加操作步骤", Toast.LENGTH_SHORT).show();
+    private void updateOperationCount() {
+        if (tvOperationCount != null) {
+            tvOperationCount.setText(String.format(Locale.getDefault(), "%d 个步骤", operations.size()));
         }
     }
-        // 修改方案选择监听器
+
+    private void updateStopAppsButtonText() {
+        if (btnSelectAppsToStop == null) return;
+        if (selectedAppsToStop.isEmpty()) {
+            btnSelectAppsToStop.setText("选择应用");
+        } else {
+            btnSelectAppsToStop.setText(String.format(
+                    Locale.getDefault(), "已选 %d 个", selectedAppsToStop.size()));
+        }
+    }
+
+    // 修改方案选择监听器
     private void setupSchemeSelector() {
         spSchemeSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -482,6 +450,7 @@ public class MainActivity extends AppCompatActivity {
         operations.clear();
         operations.addAll(currentScheme.operations);
         operationAdapter.notifyDataSetChanged();
+        updateOperationCount();
 
         // 更新执行完成操作设置
         if (swStopAppsEnabled != null) {
@@ -492,6 +461,7 @@ public class MainActivity extends AppCompatActivity {
         // 确保selectedAppsToStop与当前方案的appsToStop同步
         selectedAppsToStop.clear();
         selectedAppsToStop.addAll(currentScheme.appsToStop);
+        updateStopAppsButtonText();
 
 
         // 更新SharedPreferences中的当前方案
@@ -559,7 +529,7 @@ public class MainActivity extends AppCompatActivity {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_new_scheme, null);
         EditText etSchemeName = dialogView.findViewById(R.id.et_scheme_name);
 
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setView(dialogView)
                 .setTitle("新建方案")
                 .setPositiveButton("确定", (dialog, which) -> {
@@ -603,7 +573,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("删除方案")
                 .setMessage("确定要删除方案 '" + currentScheme.name + "' 吗?")
                 .setPositiveButton("删除", (dialog, which) -> {
@@ -639,7 +609,7 @@ public class MainActivity extends AppCompatActivity {
     private void showAutoStartCountdown() {
         if (!sharedPreferences.getBoolean(KEY_AUTO_CLICK, false)) return;
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_countdown, null);
         TextView tvCountdown = dialogView.findViewById(R.id.tv_countdown);
         Button btnStop = dialogView.findViewById(R.id.btn_stop);
@@ -649,15 +619,14 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog dialog = builder.create();
 
         final int[] countdown = {3};
-        final Handler countdownHandler = new Handler();
+        final Handler countdownHandler = new Handler(Looper.getMainLooper());
 
         Runnable countdownRunnable = new Runnable() {
             @Override
             public void run() {
-                tvCountdown.setText("自动执行，倒计时" + countdown[0] + "秒，点停止则不执行");
-                countdown[0]--;
-
-                if (countdown[0] >= 0) {
+                if (countdown[0] > 0) {
+                    tvCountdown.setText(getString(R.string.countdown_seconds, countdown[0]));
+                    countdown[0]--;
                     countdownHandler.postDelayed(this, 1000);
                 } else {
                     dialog.dismiss();
@@ -676,185 +645,39 @@ public class MainActivity extends AppCompatActivity {
         countdownHandler.post(countdownRunnable);
     }
 
-    private void startAutoClick() {
-        handler.postDelayed(this::performOperations, 1000);
-    }
-
-    private void performOperations() {
-        if (!sharedPreferences.getBoolean(KEY_AUTO_CLICK, false) || !hasRootPermission() || currentScheme == null) {
-            return;
-        }
-
-        new Thread(() -> {
-            try {
-                int clickDuration = sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION);
-                int longPressDuration = sharedPreferences.getInt(KEY_LONG_PRESS_DURATION, DEFAULT_LONG_PRESS_DURATION);
-                int swipeDuration = sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION);
-                int randomOffsetMin = Math.max(0, sharedPreferences.getInt(KEY_RANDOM_OFFSET_MIN, 0));
-                int randomOffsetMax = Math.max(randomOffsetMin, sharedPreferences.getInt(KEY_RANDOM_OFFSET_MAX, 5));
-                int randomDelayMin = Math.max(0, sharedPreferences.getInt(KEY_RANDOM_DELAY_MIN, 0));
-                int randomDelayMax = Math.max(randomDelayMin, sharedPreferences.getInt(KEY_RANDOM_DELAY_MAX, 50));
-                int[] screenSize = getScreenSize();
-                java.util.Random random = new java.util.Random();
-
-                // 启动目标Activity（可选）
-                if (!TextUtils.isEmpty(currentScheme.appActivity)) {
-                    Runtime.getRuntime().exec("su -c am start -n " + currentScheme.appActivity);
-                }
-
-                for (Operation op : currentScheme.operations) {
-                    Thread.sleep(Math.max(0, op.delay + randomSignedInRange(random, randomDelayMin, randomDelayMax)));
-                    int[] p1 = randomizePoint(op.x1, op.y1, randomOffsetMin, randomOffsetMax, screenSize, random);
-                    int[] p2 = op.type == Operation.TYPE_SWIPE
-                            ? randomizePoint(op.x2, op.y2, randomOffsetMin, randomOffsetMax, screenSize, random)
-                            : p1;
-                    if (op.type == Operation.TYPE_CLICK) {
-                        // 使用设置的点击持续时间
-                        Runtime.getRuntime().exec(
-                                "su -c input swipe " + p1[0] + " " + p1[1] + " " +
-                                        p1[0] + " " + p1[1] + " " + clickDuration).waitFor();
-                    } else if (op.type == Operation.TYPE_LONG_PRESS) {
-                        Runtime.getRuntime().exec(
-                                "su -c input swipe " + p1[0] + " " + p1[1] + " " +
-                                        p1[0] + " " + p1[1] + " " + longPressDuration).waitFor();
-                    } else {
-                        // 使用设置的滑动持续时间
-                        Runtime.getRuntime().exec(
-                                "su -c input swipe " + p1[0] + " " + p1[1] + " " +
-                                        p2[0] + " " + p2[1] + " " + swipeDuration).waitFor();
-                    }
-                }
-
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "操作流程执行完成", Toast.LENGTH_SHORT).show();
-
-                    if (currentScheme.stopAppsEnabled) {
-                        stopSelectedApps();// 执行完后停止应用
-                    }
-
-                });
-            } catch (Exception e) {
-                runOnUiThread(() ->
-                        Toast.makeText(this, "错误: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-            }
-        }).start();
-    }
-
     private void showExecuteDialog() {
-        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
-        root.setOrientation(android.widget.LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(12), dp(16), dp(12));
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_execute, null);
+        MaterialSwitch swAutoClickDialog = dialogView.findViewById(R.id.sw_auto_click);
+        MaterialSwitch swExecOverlay = dialogView.findViewById(R.id.sw_exec_overlay);
+        EditText etLoopCount = dialogView.findViewById(R.id.et_loop_count);
+        android.widget.CheckBox cbLoopForever = dialogView.findViewById(R.id.cb_loop_forever);
+        android.widget.CheckBox cbLoopNotify = dialogView.findViewById(R.id.cb_loop_notify);
 
-        android.widget.LinearLayout row1 = new android.widget.LinearLayout(this);
-        row1.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        android.widget.TextView tv1 = new android.widget.TextView(this);
-        tv1.setText("自动执行开关（软件启动则自动执行）");
-        tv1.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        android.widget.Switch sw1 = new android.widget.Switch(this);
-        sw1.setChecked(sharedPreferences.getBoolean(KEY_AUTO_CLICK, false));
-        row1.addView(tv1);
-        row1.addView(sw1);
-        root.addView(row1);
-
-        android.widget.LinearLayout row2 = new android.widget.LinearLayout(this);
-        row2.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        android.widget.TextView tv2 = new android.widget.TextView(this);
-        tv2.setText("悬浮球执行");
-        tv2.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        android.widget.Switch sw2 = new android.widget.Switch(this);
-        boolean overlayActive = execOverlayActive;
-        sw2.setChecked(overlayActive);
-        row2.addView(tv2);
-        row2.addView(sw2);
-        root.addView(row2);
-
-        android.widget.LinearLayout row3 = new android.widget.LinearLayout(this);
-        row3.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        android.widget.TextView tv3 = new android.widget.TextView(this);
-        tv3.setText("循环次数");
-        tv3.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        android.widget.EditText etLoopCount = new android.widget.EditText(this);
-        etLoopCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        etLoopCount.setHint("1");
-        etLoopCount.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        etLoopCount.setText(String.valueOf(Math.max(1, sharedPreferences.getInt(KEY_EXEC_LOOP_COUNT, 1))));
-        android.widget.CheckBox cbLoopForever = new android.widget.CheckBox(this);
-        cbLoopForever.setText("一直执行下去");
+        swAutoClickDialog.setChecked(sharedPreferences.getBoolean(KEY_AUTO_CLICK, false));
+        swExecOverlay.setChecked(execOverlayActive ||
+                sharedPreferences.getBoolean("exec_overlay_active", false));
+        etLoopCount.setText(String.valueOf(Math.max(1,
+                sharedPreferences.getInt(KEY_EXEC_LOOP_COUNT, 1))));
         cbLoopForever.setChecked(sharedPreferences.getBoolean(KEY_EXEC_LOOP_FOREVER, false));
-        row3.addView(tv3);
-        row3.addView(etLoopCount);
-        row3.addView(cbLoopForever);
-        root.addView(row3);
-
-        android.widget.LinearLayout row4 = new android.widget.LinearLayout(this);
-        row4.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        android.widget.TextView tv4 = new android.widget.TextView(this);
-        tv4.setText("循环间隔(ms)");
-        tv4.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        android.widget.EditText etLoopInterval = new android.widget.EditText(this);
-        etLoopInterval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        etLoopInterval.setHint("0");
-        etLoopInterval.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        etLoopInterval.setText(String.valueOf(Math.max(0, sharedPreferences.getInt(KEY_EXEC_LOOP_INTERVAL_MS, 0))));
-        row4.addView(tv4);
-        row4.addView(etLoopInterval);
-        root.addView(row4);
-
-        android.widget.LinearLayout row5 = new android.widget.LinearLayout(this);
-        row5.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        android.widget.CheckBox cbLoopNotify = new android.widget.CheckBox(this);
-        cbLoopNotify.setText("每轮结束提示");
         cbLoopNotify.setChecked(sharedPreferences.getBoolean(KEY_EXEC_LOOP_NOTIFY, false));
-        row5.addView(cbLoopNotify);
-        root.addView(row5);
+        etLoopCount.setEnabled(!cbLoopForever.isChecked());
 
-        AlertDialog dlg = new AlertDialog.Builder(this)
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
                 .setTitle("执行")
-                .setView(root)
+                .setView(dialogView)
                 .setNegativeButton("关闭", null)
                 .create();
 
-        sw1.setOnCheckedChangeListener((b, ck) -> {
-            sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, ck).apply();
-            if (ck) {
+        swAutoClickDialog.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, isChecked).apply();
+            if (isChecked) {
                 if (isConfigValid()) {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                            boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
-                            if (!ignoring) {
-                                new AlertDialog.Builder(MainActivity.this)
-                                        .setTitle("建议关闭电池优化")
-                                        .setMessage("为保证跨应用执行流程稳定，请将本应用设为不受电池优化限制。小米设备请设置为‘无限制’。")
-                                        .setPositiveButton("去设置", (d, w) -> {
-                                            try {
-                                                if (android.os.Build.MANUFACTURER != null && android.os.Build.MANUFACTURER.toLowerCase().contains("xiaomi")) {
-                                                    Intent miui = new Intent();
-                                                    miui.setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
-                                                    miui.putExtra("package_name", getPackageName());
-                                                    miui.putExtra("package_label", getApplicationInfo().loadLabel(getPackageManager()).toString());
-                                                    startActivity(miui);
-                                                } else {
-                                                    Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                                                    i.setData(Uri.parse("package:" + getPackageName()));
-                                                    startActivity(i);
-                                                }
-                                            } catch (Exception e1) {
-                                                try {
-                                                    Intent i2 = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                                                    startActivity(i2);
-                                                } catch (Exception ignored) {}
-                                            }
-                                        })
-                                        .setNegativeButton("暂不", null)
-                                        .show();
-                            }
-                        }
-                    } catch (Exception ignored) {}
+                    suggestDisableBatteryOptimization(
+                            "为保证跨应用执行流程稳定，请将本应用设为不受电池优化限制。小米设备请设置为“无限制”。");
                     showAutoStartCountdown();
                 } else {
                     sharedPreferences.edit().putBoolean(KEY_AUTO_CLICK, false).apply();
-                    Toast.makeText(MainActivity.this, "请先添加操作步骤", Toast.LENGTH_SHORT).show();
+                    buttonView.setChecked(false);
                 }
             }
         });
@@ -878,25 +701,21 @@ public class MainActivity extends AppCompatActivity {
             sharedPreferences.edit().putBoolean(KEY_EXEC_LOOP_NOTIFY, isChecked).apply();
         });
 
-        etLoopInterval.addTextChangedListener(new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(android.text.Editable s) {
-                int v = parseIntSafe(s.toString());
-                if (v < 0) v = 0;
-                sharedPreferences.edit().putInt(KEY_EXEC_LOOP_INTERVAL_MS, v).apply();
-            }
-        });
-
         CompoundButton.OnCheckedChangeListener execOverlayListener = new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked) {
-                    if (sharedPreferences.getBoolean("record_overlay_active", false)) {
+                    if (recordOverlayActive) {
                         Toast.makeText(MainActivity.this, "录制悬浮球已开启，请先终止录制后再开启执行悬浮球", Toast.LENGTH_SHORT).show();
-                        sw2.setOnCheckedChangeListener(null);
-                        sw2.setChecked(false);
-                        sw2.setOnCheckedChangeListener(this);
+                        swExecOverlay.setOnCheckedChangeListener(null);
+                        swExecOverlay.setChecked(false);
+                        swExecOverlay.setOnCheckedChangeListener(this);
+                        return;
+                    }
+                    if (!isConfigValid()) {
+                        swExecOverlay.setOnCheckedChangeListener(null);
+                        swExecOverlay.setChecked(false);
+                        swExecOverlay.setOnCheckedChangeListener(this);
                         return;
                     }
                     int v = parseIntSafe(etLoopCount.getText().toString());
@@ -904,35 +723,39 @@ public class MainActivity extends AppCompatActivity {
                     sharedPreferences.edit()
                             .putInt(KEY_EXEC_LOOP_COUNT, v)
                             .putBoolean(KEY_EXEC_LOOP_FOREVER, cbLoopForever.isChecked())
-                            .putInt(KEY_EXEC_LOOP_INTERVAL_MS, Math.max(0, parseIntSafe(etLoopInterval.getText().toString())))
                             .putBoolean(KEY_EXEC_LOOP_NOTIFY, cbLoopNotify.isChecked())
                             .apply();
-                    startExecOverlay();
+                    if (!startExecOverlay()) {
+                        swExecOverlay.setOnCheckedChangeListener(null);
+                        swExecOverlay.setChecked(false);
+                        swExecOverlay.setOnCheckedChangeListener(this);
+                    }
                 } else {
                     stopExecOverlay();
                 }
             }
         };
-        sw2.setOnCheckedChangeListener(execOverlayListener);
+        swExecOverlay.setOnCheckedChangeListener(execOverlayListener);
 
-        dlg.show();
+        dialog.show();
     }
 
-    private void startExecOverlay(boolean autoStart) {
+    private boolean startExecOverlay(boolean autoStart) {
         if (execOverlayActive) {
             Toast.makeText(this, "执行悬浮球已开启", Toast.LENGTH_SHORT).show();
-            return;
+            return true;
         }
-        if (sharedPreferences.getBoolean("record_overlay_active", false)) {
+        if (recordOverlayActive) {
             Toast.makeText(this, "录制悬浮球已开启，请先终止录制后再开启执行悬浮球", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
+        if (!isConfigValid()) return false;
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                 Intent permIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
                 startActivity(permIntent);
                 Toast.makeText(this, "请授予悬浮窗权限后重试", Toast.LENGTH_SHORT).show();
-                return;
+                return false;
             }
         } catch (Exception ignored) {}
         Intent intent = new Intent(this, RecordService.class);
@@ -941,10 +764,11 @@ public class MainActivity extends AppCompatActivity {
         startService(intent);
         execOverlayActive = true;
         try { sharedPreferences.edit().putBoolean("exec_overlay_active", true).apply(); } catch (Exception ignored) {}
+        return true;
     }
 
-    private void startExecOverlay() {
-        startExecOverlay(false);
+    private boolean startExecOverlay() {
+        return startExecOverlay(false);
     }
 
     private void stopExecOverlay() {
@@ -966,14 +790,16 @@ public class MainActivity extends AppCompatActivity {
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
 
         PackageManager pm = getPackageManager();
-        List<ResolveInfo> apps = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL);
+        List<ResolveInfo> apps = pm.queryIntentActivities(intent, 0);
 
         if (apps.isEmpty()) {
             Toast.makeText(this, "未找到可启动的应用", Toast.LENGTH_SHORT).show();
             return;
         }
+        Collections.sort(apps, (left, right) -> left.loadLabel(pm).toString()
+                .compareToIgnoreCase(right.loadLabel(pm).toString()));
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
         builder.setTitle("选择应用");
 
         List<String> appNames = new ArrayList<>();
@@ -1046,50 +872,58 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this)
                 .setView(dialogView)
                 .setTitle(operation == null ? "添加操作" : "编辑操作")
-                .setPositiveButton("保存", (dialog, which) -> {
-                    try {
-                        int typeSel = spType.getSelectedItemPosition();
-                        int type = typeSel == 0 ? Operation.TYPE_CLICK : (typeSel == 1 ? Operation.TYPE_LONG_PRESS : Operation.TYPE_SWIPE);
-                        int delay = Integer.parseInt(etDelay.getText().toString());
-                        int x1 = Integer.parseInt(etX1.getText().toString());
-                        int y1 = Integer.parseInt(etY1.getText().toString());
-                        int x2 = type == Operation.TYPE_SWIPE ?
-                                Integer.parseInt(etX2.getText().toString()) : 0;
-                        int y2 = type == Operation.TYPE_SWIPE ?
-                                Integer.parseInt(etY2.getText().toString()) : 0;
-
-                        Operation op = new Operation(type, delay, x1, y1, x2, y2);
-                        if (operation == null) {
-                            operations.add(op);
-                        } else {
-                            operations.set(operations.indexOf(operation), op);
-                        }
-                        operationAdapter.notifyDataSetChanged();
-                        saveCurrentScheme();
-                    } catch (NumberFormatException e) {
-                        Toast.makeText(this, "请输入有效的数值", Toast.LENGTH_SHORT).show();
-                    }
-                })
+                .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null);
 
         if (operation != null) {
             builder.setNeutralButton("删除", (dialog, which) -> {
                 operations.remove(operation);
                 operationAdapter.notifyDataSetChanged();
+                updateOperationCount();
                 saveCurrentScheme();
             });
         }
 
         AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    try {
+                        int typeSel = spType.getSelectedItemPosition();
+                        int type = typeSel == 0 ? Operation.TYPE_CLICK
+                                : (typeSel == 1 ? Operation.TYPE_LONG_PRESS : Operation.TYPE_SWIPE);
+                        int delay = Math.max(0, Integer.parseInt(etDelay.getText().toString()));
+                        int x1 = Math.max(0, Integer.parseInt(etX1.getText().toString()));
+                        int y1 = Math.max(0, Integer.parseInt(etY1.getText().toString()));
+                        int x2 = type == Operation.TYPE_SWIPE
+                                ? Math.max(0, Integer.parseInt(etX2.getText().toString())) : 0;
+                        int y2 = type == Operation.TYPE_SWIPE
+                                ? Math.max(0, Integer.parseInt(etY2.getText().toString())) : 0;
+
+                        Operation updatedOperation = new Operation(type, delay, x1, y1, x2, y2);
+                        if (operation == null) {
+                            operations.add(updatedOperation);
+                        } else {
+                            int index = operations.indexOf(operation);
+                            if (index >= 0) operations.set(index, updatedOperation);
+                        }
+                        operationAdapter.notifyDataSetChanged();
+                        updateOperationCount();
+                        saveCurrentScheme();
+                        dialog.dismiss();
+                    } catch (NumberFormatException error) {
+                        Toast.makeText(this, "请完整填写有效的数值", Toast.LENGTH_SHORT).show();
+                    }
+                }));
         dialog.show();
 
-        boolean isClick = spType.getSelectedItemPosition() == 0;
-        tvStartPoint.setText(isClick ? "点击坐标:" : "起始坐标:");
-        layoutEndPoint.setVisibility(isClick ? View.GONE : View.VISIBLE);
-        layoutXy2.setVisibility(isClick ? View.GONE : View.VISIBLE);
+        boolean singlePoint = spType.getSelectedItemPosition() == 0 ||
+                spType.getSelectedItemPosition() == 1;
+        tvStartPoint.setText(singlePoint ? "点击/长按坐标:" : "起始坐标:");
+        layoutEndPoint.setVisibility(singlePoint ? View.GONE : View.VISIBLE);
+        layoutXy2.setVisibility(singlePoint ? View.GONE : View.VISIBLE);
     }
 
     private void showAppSelectionDialog() {
@@ -1097,12 +931,14 @@ public class MainActivity extends AppCompatActivity {
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
 
         PackageManager pm = getPackageManager();
-        List<ResolveInfo> apps = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL);
+        List<ResolveInfo> apps = pm.queryIntentActivities(intent, 0);
 
         if (apps.isEmpty()) {
             Toast.makeText(this, "未找到可启动的应用", Toast.LENGTH_SHORT).show();
             return;
         }
+        Collections.sort(apps, (left, right) -> left.loadLabel(pm).toString()
+                .compareToIgnoreCase(right.loadLabel(pm).toString()));
 
         List<String> appNames = new ArrayList<>();
         final List<String> appPackages = new ArrayList<>();
@@ -1115,7 +951,7 @@ public class MainActivity extends AppCompatActivity {
             checkedItems[i] = selectedAppsToStop.contains(info.activityInfo.packageName);
         }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this)
                 .setTitle("选择要停止的应用")
                 .setMultiChoiceItems(appNames.toArray(new String[0]), checkedItems,
                         (dialog, which, isChecked) -> checkedItems[which] = isChecked)
@@ -1132,6 +968,7 @@ public class MainActivity extends AppCompatActivity {
                         currentScheme.appsToStop = new ArrayList<>(selectedAppsToStop);
                         saveAllSchemes(); // 确保立即保存
                     }
+                    updateStopAppsButtonText();
                     Toast.makeText(MainActivity.this, "已选择 " + selectedAppsToStop.size() + " 个应用", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("取消", null);
@@ -1139,33 +976,23 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    private void stopSelectedApps() {
-        if (selectedAppsToStop.isEmpty()) {
-            Toast.makeText(this, "未选择要停止的应用", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        try {
-            for (String packageName : selectedAppsToStop) {
-                Runtime.getRuntime().exec("su -c am force-stop " + packageName);
-            }
-            Toast.makeText(this, "已停止" + selectedAppsToStop.size() + "个应用", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "停止应用失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
     private void showSettingsDialog() {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null);
 
         EditText etClickDuration = dialogView.findViewById(R.id.et_click_duration);
+        Spinner spClickMode = dialogView.findViewById(R.id.sp_click_mode);
+        TextView tvClickModeDescription = dialogView.findViewById(R.id.tv_click_mode_description);
+        View layoutClickDuration = dialogView.findViewById(R.id.layout_click_duration);
+        android.widget.CheckBox cbRawInputEnabled = dialogView.findViewById(R.id.cb_raw_input_enabled);
+        Button btnRawInputTest = dialogView.findViewById(R.id.btn_raw_input_test);
+        TextView tvRawInputStatus = dialogView.findViewById(R.id.tv_raw_input_status);
         EditText etSwipeDuration = dialogView.findViewById(R.id.et_swipe_duration);
         EditText etLongPressDuration = dialogView.findViewById(R.id.et_long_press_duration);
         EditText etRandomOffsetMin = dialogView.findViewById(R.id.et_random_offset_min);
         EditText etRandomOffsetMax = dialogView.findViewById(R.id.et_random_offset_max);
         EditText etRandomDelayMin = dialogView.findViewById(R.id.et_random_delay_min);
         EditText etRandomDelayMax = dialogView.findViewById(R.id.et_random_delay_max);
-        Button btnTouchTraceColor = dialogView.findViewById(R.id.btn_touch_trace_color);
+        MaterialButton btnTouchTraceColor = dialogView.findViewById(R.id.btn_touch_trace_color);
         EditText etTouchTraceAlpha = dialogView.findViewById(R.id.et_touch_trace_alpha);
         EditText etMoveTolerancePx = dialogView.findViewById(R.id.et_move_tolerance_px);
         EditText etMotionThreshold = dialogView.findViewById(R.id.et_motion_threshold);
@@ -1184,6 +1011,43 @@ public class MainActivity extends AppCompatActivity {
 
         etClickDuration.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_CLICK_DURATION, DEFAULT_CLICK_DURATION)));
+        int savedClickMode = sharedPreferences.getInt(KEY_CLICK_MODE, CLICK_MODE_FAST);
+        spClickMode.setSelection(savedClickMode == CLICK_MODE_CUSTOM_PRESS
+                ? CLICK_MODE_CUSTOM_PRESS : CLICK_MODE_FAST);
+        Runnable updateClickModeUi = () -> {
+            boolean customPress = spClickMode.getSelectedItemPosition() == CLICK_MODE_CUSTOM_PRESS;
+            etClickDuration.setEnabled(customPress);
+            layoutClickDuration.setAlpha(customPress ? 1f : 0.45f);
+            tvClickModeDescription.setText(customPress
+                    ? "自定义按压：按住设定时间后松开；持续时间越长，点击频率越低。"
+                    : "快速点击：立即按下并松开，速度更快；不使用按压持续时间。");
+        };
+        spClickMode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                updateClickModeUi.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                updateClickModeUi.run();
+            }
+        });
+        updateClickModeUi.run();
+        cbRawInputEnabled.setChecked(sharedPreferences.getBoolean(KEY_RAW_INPUT_ENABLED, false));
+        tvRawInputStatus.setText(cbRawInputEnabled.isChecked()
+                ? "已开启；每次执行前都会重新识别和自检。"
+                : "高速模式未开启（默认）。");
+        btnRawInputTest.setOnClickListener(v -> testRawInputMode(
+                etTouchDevice, etMaxX, etMaxY, tvRawInputStatus, btnRawInputTest));
+        cbRawInputEnabled.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                tvRawInputStatus.setText("正在自动识别并自检...");
+                btnRawInputTest.performClick();
+            } else {
+                tvRawInputStatus.setText("高速模式未开启（默认）。");
+            }
+        });
         etSwipeDuration.setText(String.valueOf(
                 sharedPreferences.getInt(KEY_SWIPE_DURATION, DEFAULT_SWIPE_DURATION)));
         etLongPressDuration.setText(String.valueOf(
@@ -1265,14 +1129,14 @@ public class MainActivity extends AppCompatActivity {
                 w = dm2.widthPixels;
                 h = dm2.heightPixels;
             }
-            tvScreenPx.setText(w + " x " + h);
+            tvScreenPx.setText(getString(R.string.screen_size_format, w, h));
         } catch (Throwable ignored) {}
 
         btnAutoDetect.setOnClickListener(v -> {
             autoDetectTouchDevice(etTouchDevice, etMaxX, etMaxY, tvScreenPx);
         });
 
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setView(dialogView)
                 .setTitle("设置")
                 .setPositiveButton("保存", (dialog, which) -> {
@@ -1288,6 +1152,8 @@ public class MainActivity extends AppCompatActivity {
                         int moveTolerancePx = parseIntSafe(etMoveTolerancePx.getText().toString());
                         int motionThreshold = parseIntSafe(etMotionThreshold.getText().toString());
                         int firstActionDelay = parseIntSafe(etFirstActionDelay.getText().toString());
+                        int clickMode = spClickMode.getSelectedItemPosition() == CLICK_MODE_CUSTOM_PRESS
+                                ? CLICK_MODE_CUSTOM_PRESS : CLICK_MODE_FAST;
                         boolean showDebug = cbShowDebug.isChecked();
                         boolean showTouchTrace = cbShowTouchTrace.isChecked();
                         String touchTraceColor = normalizeColorText(selectedTraceColor[0]);
@@ -1307,7 +1173,9 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         sharedPreferences.edit()
+                                .putInt(KEY_CLICK_MODE, clickMode)
                                 .putInt(KEY_CLICK_DURATION, clickDuration)
+                                .putBoolean(KEY_RAW_INPUT_ENABLED, cbRawInputEnabled.isChecked())
                                 .putInt(KEY_LONG_PRESS_DURATION, longPressDuration)
                                 .putInt(KEY_SWIPE_DURATION, swipeDuration)
                                 .putInt(KEY_RANDOM_OFFSET_MIN, Math.max(0, randomOffsetMin))
@@ -1438,7 +1306,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        permissionsDialog = new AlertDialog.Builder(this)
+        permissionsDialog = new MaterialAlertDialogBuilder(this)
                 .setView(dialogView)
                 .setTitle("权限设置")
                 .setNegativeButton("关闭", (d, w) -> { permissionsDialog = null; })
@@ -1485,6 +1353,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        execOverlayActive = RecordService.isExecutionOverlayActive();
+        recordOverlayActive = RecordService.isRecordingOverlayActive();
+        sharedPreferences.edit()
+                .putBoolean("exec_overlay_active", execOverlayActive)
+                .putBoolean("record_overlay_active", recordOverlayActive)
+                .apply();
+        if (btnStartRecording != null) {
+            btnStartRecording.setText(recordOverlayActive
+                    ? "终止录制" : "录制动作");
+        }
         refreshPermissionsDialogStatuses();
     }
 
@@ -1499,23 +1377,30 @@ public class MainActivity extends AppCompatActivity {
     private String normalizeColorText(String colorText) {
         String value = colorText == null ? "" : colorText.trim();
         if (!value.startsWith("#")) value = "#" + value;
+        Integer color = parseHexColor(value);
+        return color == null ? "#FF4081" :
+                String.format(Locale.ROOT, "#%06X", color & 0x00FFFFFF);
+    }
+
+    private Integer parseHexColor(String colorText) {
+        String value = colorText == null ? "" : colorText.trim();
+        if (!value.startsWith("#")) value = "#" + value;
+        if (value.length() != 7 && value.length() != 9) return null;
         try {
-            Color.parseColor(value);
-            return value;
-        } catch (Exception e) {
-            return "#FF4081";
+            return Color.parseColor(value);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
-    private void updateColorButton(Button button, String colorText) {
+    private void updateColorButton(MaterialButton button, String colorText) {
         if (button == null) return;
         String normalized = normalizeColorText(colorText);
         int color = Color.parseColor(normalized);
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(color);
-        bg.setCornerRadius(dp(6));
-        bg.setStroke(Math.max(1, dp(1)), Color.parseColor("#666666"));
-        button.setBackground(bg);
+        button.setBackgroundTintList(ColorStateList.valueOf(color));
+        button.setStrokeColor(ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.app_outline)));
+        button.setStrokeWidth(Math.max(1, dp(1)));
         button.setText(normalized);
         button.setTextColor(isLightColor(color) ? Color.BLACK : Color.WHITE);
     }
@@ -1527,84 +1412,121 @@ public class MainActivity extends AppCompatActivity {
         return (r * 299 + g * 587 + b * 114) >= 186000;
     }
 
-    private void showTraceColorPicker(String[] selectedColor, Button previewButton) {
+    private void showTraceColorPicker(String[] selectedColor, MaterialButton previewButton) {
         final String[] colors = {
-                "#FF4081", "#F44336", "#FF9800", "#FFEB3B",
-                "#4CAF50", "#00BCD4", "#2196F3", "#3F51B5",
-                "#9C27B0", "#FFFFFF", "#9E9E9E", "#000000"
+                "#E11D48", "#DC2626", "#EA580C", "#EAB308", "#65A30D", "#16A34A",
+                "#0D9488", "#0891B2", "#0284C7", "#2563EB", "#4F46E5", "#7C3AED",
+                "#C026D3", "#DB2777", "#FFFFFF", "#94A3B8", "#475569", "#111827"
         };
-        android.widget.GridLayout grid = new android.widget.GridLayout(this);
-        grid.setColumnCount(4);
-        int pad = dp(12);
-        grid.setPadding(pad, pad, pad, pad);
-        final AlertDialog[] dialogRef = new AlertDialog[1];
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_color_picker, null);
+        android.widget.GridLayout grid = dialogView.findViewById(R.id.grid_color_presets);
+        MaterialButton pickerPreview = dialogView.findViewById(R.id.btn_color_picker_preview);
+        EditText etCustomColor = dialogView.findViewById(R.id.et_custom_color);
+
+        String initialColor = normalizeColorText(selectedColor[0]);
+        etCustomColor.setText(initialColor);
+        updateColorButton(pickerPreview, initialColor);
+
         for (String color : colors) {
-            Button swatch = new Button(this);
+            MaterialButton swatch = new MaterialButton(this, null,
+                    com.google.android.material.R.attr.materialButtonOutlinedStyle);
             swatch.setText("");
-            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-            bg.setColor(Color.parseColor(color));
-            bg.setCornerRadius(dp(6));
-            bg.setStroke(Math.max(1, dp(1)), Color.parseColor("#666666"));
-            swatch.setBackground(bg);
+            swatch.setContentDescription(color);
+            swatch.setMinWidth(0);
+            swatch.setMinimumWidth(0);
+            swatch.setInsetTop(0);
+            swatch.setInsetBottom(0);
+            swatch.setCornerRadius(dp(6));
+            swatch.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor(color)));
+            swatch.setStrokeColor(ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.app_outline)));
+            swatch.setStrokeWidth(Math.max(1, dp(1)));
             android.widget.GridLayout.LayoutParams lp = new android.widget.GridLayout.LayoutParams();
-            lp.width = dp(56);
-            lp.height = dp(44);
-            lp.setMargins(dp(6), dp(6), dp(6), dp(6));
+            lp.width = dp(38);
+            lp.height = dp(38);
+            lp.setMargins(dp(3), dp(3), dp(3), dp(3));
             swatch.setLayoutParams(lp);
             swatch.setOnClickListener(v -> {
-                selectedColor[0] = color;
-                updateColorButton(previewButton, color);
-                if (dialogRef[0] != null) dialogRef[0].dismiss();
+                etCustomColor.setText(color);
+                etCustomColor.setSelection(etCustomColor.length());
             });
             grid.addView(swatch);
         }
-        dialogRef[0] = new AlertDialog.Builder(this)
-                .setTitle("选择轨迹颜色")
-                .setView(grid)
-                .setNegativeButton("取消", null)
-                .create();
-        dialogRef[0].show();
-    }
 
-    private int[] randomizePoint(int x, int y, int offsetMin, int offsetMax, int[] screenSize, java.util.Random random) {
-        int rx = x + randomSignedInRange(random, offsetMin, offsetMax);
-        int ry = y + randomSignedInRange(random, offsetMin, offsetMax);
-        if (screenSize != null && screenSize[0] > 0 && screenSize[1] > 0) {
-            rx = clampInt(rx, 0, screenSize[0] - 1);
-            ry = clampInt(ry, 0, screenSize[1] - 1);
-        }
-        return new int[]{rx, ry};
-    }
-
-    private int randomSignedInRange(java.util.Random random, int min, int max) {
-        if (random == null || max <= 0) return 0;
-        int lo = Math.max(0, Math.min(min, max));
-        int hi = Math.max(lo, max);
-        int magnitude = lo + random.nextInt(hi - lo + 1);
-        return random.nextBoolean() ? magnitude : -magnitude;
-    }
-
-    private int[] getScreenSize() {
-        int w = 0, h = 0;
-        try {
-            WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-            if (wm != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
-                    w = b.width();
-                    h = b.height();
-                } else {
-                    DisplayMetrics dm = new DisplayMetrics();
-                    android.view.Display d = wm.getDefaultDisplay();
-                    if (d != null) {
-                        d.getRealMetrics(dm);
-                        w = dm.widthPixels;
-                        h = dm.heightPixels;
-                    }
+        etCustomColor.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable editable) {
+                Integer color = parseHexColor(editable.toString());
+                if (color != null) {
+                    updateColorButton(pickerPreview,
+                            String.format(Locale.ROOT, "#%06X", color & 0x00FFFFFF));
                 }
             }
+        });
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle("选择轨迹颜色")
+                .setView(dialogView)
+                .setPositiveButton("使用", null)
+                .setNegativeButton("取消", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    Integer color = parseHexColor(etCustomColor.getText().toString());
+                    if (color == null) {
+                        etCustomColor.setError("请输入 #RRGGBB 格式的颜色");
+                        return;
+                    }
+                    String normalized = String.format(
+                            Locale.ROOT, "#%06X", color & 0x00FFFFFF);
+                    selectedColor[0] = normalized;
+                    updateColorButton(previewButton, normalized);
+                    dialog.dismiss();
+                }));
+        dialog.show();
+    }
+
+    private void suggestDisableBatteryOptimization(String message) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        try {
+            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+            if (powerManager != null &&
+                    powerManager.isIgnoringBatteryOptimizations(getPackageName())) {
+                return;
+            }
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("建议关闭电池优化")
+                    .setMessage(message)
+                    .setPositiveButton("去设置", (dialog, which) -> openBatteryOptimizationSettings())
+                    .setNegativeButton("暂不", null)
+                    .show();
         } catch (Exception ignored) {}
-        return new int[]{w, h};
+    }
+
+    private void openBatteryOptimizationSettings() {
+        try {
+            String manufacturer = Build.MANUFACTURER == null
+                    ? "" : Build.MANUFACTURER.toLowerCase(Locale.ROOT);
+            if (manufacturer.contains("xiaomi")) {
+                Intent miuiIntent = new Intent();
+                miuiIntent.setComponent(new ComponentName(
+                        "com.miui.powerkeeper",
+                        "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
+                miuiIntent.putExtra("package_name", getPackageName());
+                miuiIntent.putExtra("package_label",
+                        getApplicationInfo().loadLabel(getPackageManager()).toString());
+                startActivity(miuiIntent);
+            } else {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        } catch (Exception firstError) {
+            try {
+                startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+            } catch (Exception ignored) {}
+        }
     }
 
     private void startRecordingOverlay() {
@@ -1614,7 +1536,7 @@ public class MainActivity extends AppCompatActivity {
         }
         String tdCheck = sharedPreferences.getString(KEY_TOUCH_DEVICE, "");
         if (TextUtils.isEmpty(tdCheck)) {
-            new AlertDialog.Builder(this)
+            new MaterialAlertDialogBuilder(this)
                     .setTitle("需要配置触摸设备")
                     .setMessage("请前往设置，填入触摸设备路径（可使用自动解析）。")
                     .setPositiveButton("去设置", (d, w) -> showSettingsDialog())
@@ -1622,39 +1544,8 @@ public class MainActivity extends AppCompatActivity {
                     .show();
             return;
         }
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
-                if (!ignoring) {
-                    new AlertDialog.Builder(MainActivity.this)
-                            .setTitle("建议关闭电池优化")
-                            .setMessage("为保证录制与跨应用执行稳定，请将本应用设为不受电池优化限制。小米设备请设置为‘无限制’。")
-                            .setPositiveButton("去设置", (d, w) -> {
-                                try {
-                                    if (android.os.Build.MANUFACTURER != null && android.os.Build.MANUFACTURER.toLowerCase().contains("xiaomi")) {
-                                        Intent miui = new Intent();
-                                        miui.setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
-                                        miui.putExtra("package_name", getPackageName());
-                                        miui.putExtra("package_label", getApplicationInfo().loadLabel(getPackageManager()).toString());
-                                        startActivity(miui);
-                                    } else {
-                                        Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                                        i.setData(Uri.parse("package:" + getPackageName()));
-                                        startActivity(i);
-                                    }
-                                } catch (Exception e1) {
-                                    try {
-                                        Intent i2 = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                                        startActivity(i2);
-                                    } catch (Exception ignored) {}
-                                }
-                            })
-                            .setNegativeButton("暂不", null)
-                            .show();
-                }
-            }
-        } catch (Exception ignored) {}
+        suggestDisableBatteryOptimization(
+                "为保证录制与跨应用执行稳定，请将本应用设为不受电池优化限制。小米设备请设置为“无限制”。");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent permIntent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
             startActivity(permIntent);
@@ -1668,6 +1559,7 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("coordinate_rotation_mode", sharedPreferences.getInt(KEY_COORDINATE_ROTATION_MODE, 0));
         startService(intent);
         btnStartRecording.setText("终止录制");
+        recordOverlayActive = true;
         sharedPreferences.edit().putBoolean("record_overlay_active", true).apply();
         //Toast.makeText(this, "已开启悬浮球，点击开始/结束录制", Toast.LENGTH_SHORT).show();
     }
@@ -1678,13 +1570,13 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("cancel", cancelSteps);
         startService(intent);
         btnStartRecording.setText("录制动作");
+        recordOverlayActive = false;
         sharedPreferences.edit().putBoolean("record_overlay_active", false).apply();
         if (cancelSteps) Toast.makeText(this, "已终止录制，不保存步骤", Toast.LENGTH_SHORT).show();
     }
 
     private void toggleRecordingOverlay() {
-        boolean active = sharedPreferences.getBoolean("record_overlay_active", false);
-        if (!active) {
+        if (!recordOverlayActive) {
             startRecordingOverlay();
         } else {
             stopRecordingOverlay(true);
@@ -1707,6 +1599,36 @@ public class MainActivity extends AppCompatActivity {
                 android.util.Log.i(TAG, "Auto detected touch device: " + result.path + " maxX=" + result.maxX + " maxY=" + result.maxY);
             }
         }, "auto_detect_touch_device").start();
+    }
+
+    private void testRawInputMode(EditText etTouchDevice, EditText etMaxX, EditText etMaxY,
+                                  TextView tvStatus, Button testButton) {
+        String preferredDevice = etTouchDevice.getText().toString().trim();
+        testButton.setEnabled(false);
+        tvStatus.setText("正在自动识别并执行无点击自检...");
+        new Thread(() -> {
+            RawInputClient client = null;
+            try {
+                RawInputProfile profile = RawInputProfile.detect(preferredDevice);
+                client = RawInputClient.connect(this, profile);
+                runOnUiThread(() -> {
+                    etTouchDevice.setText(profile.devicePath);
+                    etMaxX.setText(String.valueOf(profile.maxX));
+                    etMaxY.setText(String.valueOf(profile.maxY));
+                    tvStatus.setText(getString(
+                            R.string.raw_input_test_success, profile.description()));
+                });
+            } catch (Exception e) {
+                android.util.Log.w(TAG, "Raw input self-test failed", e);
+                String message = TextUtils.isEmpty(e.getMessage())
+                        ? e.getClass().getSimpleName() : e.getMessage();
+                runOnUiThread(() -> tvStatus.setText(getString(
+                        R.string.raw_input_test_failed, message)));
+            } finally {
+                if (client != null) client.close();
+                runOnUiThread(() -> testButton.setEnabled(true));
+            }
+        }, "raw_input_self_test").start();
     }
 
     private void autoDetectTouchDevice(EditText etTouchDevice, EditText etMaxX, EditText etMaxY, TextView tvScreenPx) {
@@ -1769,7 +1691,10 @@ public class MainActivity extends AppCompatActivity {
                                     w = dm2.widthPixels;
                                     h = dm2.heightPixels;
                                 }
-                                if (tvScreenPx != null) tvScreenPx.setText(w + " x " + h);
+                                if (tvScreenPx != null) {
+                                    tvScreenPx.setText(getString(
+                                            R.string.screen_size_format, w, h));
+                                }
                             } catch (Throwable ignored) {}
                         });
                         break;
@@ -1840,22 +1765,27 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             hasRootPermission = hasRootPermission();
             sharedPreferences.edit().putBoolean(KEY_ROOT_GRANTED, hasRootPermission).apply();
-            runOnUiThread(() -> updateRootStatusUI());
+            runOnUiThread(() -> {
+                updateRootStatusUI();
+                refreshPermissionsDialogStatuses();
+            });
         }).start();
     }
 
     private void updateRootStatusUI() {
         if (hasRootPermission) {
-            tvRootStatus.setText("ROOT已获取");
-            tvRootStatus.setBackgroundColor(Color.parseColor("#FF4CAF50"));
+            tvRootStatus.setText(R.string.root_status_ready);
+            tvRootStatus.setBackgroundResource(R.drawable.bg_status_success);
+            tvRootStatus.setTextColor(ContextCompat.getColor(this, R.color.app_success));
         } else {
-            tvRootStatus.setText("ROOT未获取（点我获取）");
-            tvRootStatus.setBackgroundColor(Color.parseColor("#FFF44336"));
+            tvRootStatus.setText(R.string.root_status_missing);
+            tvRootStatus.setBackgroundResource(R.drawable.bg_status_error);
+            tvRootStatus.setTextColor(ContextCompat.getColor(this, R.color.app_error));
         }
     }
 
     private void requestRootPermission() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("申请ROOT权限")
                 .setMessage("此功能需要ROOT权限才能正常工作，是否现在申请？")
                 .setPositiveButton("申请", (dialog, which) -> {
@@ -1867,26 +1797,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean hasRootPermission() {
+        Process process = null;
         try {
-            Process process = Runtime.getRuntime().exec("su");
-            DataOutputStream os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes("exit\n");
-            os.flush();
-            boolean hasRoot = process.waitFor() == 0;
-            if (!hasRoot) {
-                runOnUiThread(() ->
-                        Toast.makeText(this, "需要Root权限", Toast.LENGTH_SHORT).show());
+            process = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
+            long deadline = System.currentTimeMillis() + 8000L;
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    return process.exitValue() == 0;
+                } catch (IllegalThreadStateException stillRunning) {
+                    Thread.sleep(50L);
+                }
             }
-            return hasRoot;
+            process.destroy();
+            return false;
         } catch (Exception e) {
             return false;
+        } finally {
+            if (process != null) {
+                try { process.getInputStream().close(); } catch (Exception ignored) {}
+                try { process.getErrorStream().close(); } catch (Exception ignored) {}
+                try { process.getOutputStream().close(); } catch (Exception ignored) {}
+                try { process.destroy(); } catch (Exception ignored) {}
+            }
         }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        handler.removeCallbacksAndMessages(null);
         if (recordingReceiver != null) {
             try { unregisterReceiver(recordingReceiver); } catch (Exception ignored) {}
         }
@@ -1909,17 +1847,19 @@ public class MainActivity extends AppCompatActivity {
                             operations.clear();
                             operations.addAll(ops);
                             operationAdapter.notifyDataSetChanged();
+                            updateOperationCount();
                             saveCurrentSchemeWithToast();
                             Toast.makeText(MainActivity.this, "录制完成，已填入步骤", Toast.LENGTH_SHORT).show();
                         } else {
                             Toast.makeText(MainActivity.this, "未录入任何动作，保留原有步骤", Toast.LENGTH_SHORT).show();
                         }
                         sharedPreferences.edit().putBoolean("record_overlay_active", false).apply();
+                        recordOverlayActive = false;
                         if (btnStartRecording != null) btnStartRecording.setText("录制动作");
                     }
                     boolean showDebug = sharedPreferences.getBoolean(KEY_SHOW_DEBUG, false);
                     if (showDebug && debugLog != null && !debugLog.isEmpty()) {
-                        new android.app.AlertDialog.Builder(MainActivity.this)
+                        new MaterialAlertDialogBuilder(MainActivity.this)
                                 .setTitle("录制调试信息")
                                 .setMessage(debugLog)
                                 .setPositiveButton("复制", (d, w) -> {
@@ -1941,23 +1881,35 @@ public class MainActivity extends AppCompatActivity {
 
     private void ensureNotificationPermission() {
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
+                return;
+            }
             NotificationManagerCompat nmc = NotificationManagerCompat.from(this);
             boolean enabled = nmc.areNotificationsEnabled();
             if (!enabled) {
-                new AlertDialog.Builder(this)
+                new MaterialAlertDialogBuilder(this)
                         .setTitle("开启通知以提升稳定性")
                         .setMessage("请为本应用开启通知，以确保保活通知正常显示并提升录制/执行稳定性。")
                         .setPositiveButton("去设置", (d, w) -> {
                             try {
-                                Intent i = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                                i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                                Intent i;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                                    i.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                                } else {
+                                    i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            Uri.parse("package:" + getPackageName()));
+                                }
                                 startActivity(i);
                             } catch (Exception ignored) {}
                         })
                         .setNegativeButton("取消", null)
                         .show();
             }
-            // 在此处仅提示并跳转系统设置，不主动弹出运行时权限弹窗
         } catch (Exception ignored) {}
     }
 
@@ -1986,7 +1938,12 @@ public class MainActivity extends AppCompatActivity {
                 pendingStartKeepAlive = false;
                 android.util.Log.i(TAG, "POST_NOTIFICATIONS granted; starting keep-alive");
                 startKeepAliveServiceSafely();
+            } else if (!granted && pendingStartKeepAlive) {
+                pendingStartKeepAlive = false;
+                sharedPreferences.edit().putBoolean(KEY_KEEP_ALIVE, false).apply();
+                Toast.makeText(this, "未授予通知权限，保活未启动", Toast.LENGTH_SHORT).show();
             }
+            refreshPermissionsDialogStatuses();
         }
     }
 }
